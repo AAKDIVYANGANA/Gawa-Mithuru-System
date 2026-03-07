@@ -46,9 +46,9 @@ export default function Landing() {
       <div className="px-6 py-8" style={{ backgroundColor: 'rgba(41, 38, 38, 0.35)' }}>
         <h2 className="text-center text-xl font-bold mb-6 text-green-100">👥 පරිශීලක භූමිකාවන්</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
-          <RoleCard icon="👨‍🌾" title="ගොවියා" desc="ගව ලේඛනය, කිරි ඇතුළත් කිරීම" color="bg-green-600" />
-          <RoleCard icon="👨‍💼" title="LDO නිලධාරී" desc="ගොවීන් නිරීක්ෂණය, AI අනුමැතිය" color="bg-blue-600" />
-          <RoleCard icon="👨‍⚕️" title="පශු වෛද්‍ය" desc="සෞඛ්‍ය පරීක්ෂණ සහ බෙහෙත් වට්ටෝරු" color="bg-purple-600" />
+          <RoleCard icon="👨‍🌾" title="ගොවියා" desc="ගව දත්ත කළමනාකරණය සහ දෛනික කිරි අස්වැන්න ඇතුළත් කිරීම" color="bg-green-600" />
+          <RoleCard icon="👨‍💼" title="LDO නිලධාරී" desc="ගොවිපළ නිරීක්ෂණය සහ සිංචන (AI) ඉල්ලීම් අනුමත කිරීම" color="bg-blue-600" />
+          <RoleCard icon="👨‍⚕️" title="පශු වෛද්‍ය" desc="සත්ව සෞඛ්‍ය පරීක්ෂාව සහ ප්‍රතිකාර නිර්දේශ ලබා දීම" color="bg-purple-600" />
         </div>
       </div>
 

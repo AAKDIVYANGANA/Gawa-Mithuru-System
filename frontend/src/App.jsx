@@ -9,8 +9,8 @@ import Landing from './pages/Landing';
 
 function ProtectedRoute({ children, role }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" />;
-  if (role && user.role !== role) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (role && user.role !== role) return <Navigate to="/login" replace />;
   return children;
 }
 
