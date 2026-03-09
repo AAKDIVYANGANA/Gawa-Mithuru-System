@@ -31,7 +31,11 @@ export default function Landing() {
 
       {/* Features */}
       <div className="px-6 pb-10">
-        <h2 className="text-center text-xl font-bold mb-6 text-green-100">✨ ප්‍රධාන පහසුකම්</h2>
+        <h2 className="flex items-center justify-center text-center text-xl font-bold mb-8 text-green-100 gap-4">
+        <span className="h-px w-12 md:w-20 bg-gradient-to-r from-transparent to-green-500"></span>
+        ප්‍රධාන පහසුකම්
+       <span className="h-px w-12 md:w-20 bg-gradient-to-l from-transparent to-green-500"></span>
+       </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-3xl mx-auto">
           <FeatureCard icon="🐄" title="ගව තොරතුරු" desc="සියලු ගවයන්ගේ විස්තර" />
           <FeatureCard icon="🍶" title="කිරි වාර්තා" desc="දෛනික කිරි අස්වැන්න සටහන් කිරීම" />
