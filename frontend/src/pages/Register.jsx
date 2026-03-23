@@ -113,7 +113,7 @@ export default function Register() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ලිපිනය</label>
             <input type="text" name="address" value={formData.address} onChange={handleChange}
-              placeholder="ඔබේ ලිපිනය" required
+              placeholder="ගොවිපළේ ලිපිනය" required
               className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
           </div>
 

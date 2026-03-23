@@ -2,7 +2,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Register - Farmer, LDO, Vet
+// Register - Farmer
 const registerFarmer = async (req, res) => {
   try {
     const { fullName, nic, phone, email, address, district, password, role } = req.body;

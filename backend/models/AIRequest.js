@@ -6,12 +6,13 @@ const aiRequestSchema = new mongoose.Schema({
   requestDate: { type: Date, required: true },
   breedPreference: { type: String },
   notes: { type: String },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected', 'completed'],
-    default: 'pending'
-  },
-  ldoNotes: { type: String }
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'completed'], default: 'pending' },
+  ldoNotes: { type: String },
+  bullId: { type: String },
+  semenBreed: { type: String },
+  batchNo: { type: String },
+  aiDate: { type: Date },
+  pdDate: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model('AIRequest', aiRequestSchema);

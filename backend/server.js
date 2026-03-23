@@ -18,6 +18,8 @@ app.use('/api/milk', require('./routes/milkRoutes'));
 app.use('/api/health', require('./routes/healthRoutes'));
 app.use('/api/ai-requests', require('./routes/aiRequestRoutes'));
 app.use('/api/advice', require('./routes/adviceRoutes'));
+app.use('/api/ldo', require('./routes/ldoRoutes'));
+app.use('/api/vaccinations', require('./routes/vaccinationRoutes'));
 
 // Test Route
 app.get('/', (req, res) => {
