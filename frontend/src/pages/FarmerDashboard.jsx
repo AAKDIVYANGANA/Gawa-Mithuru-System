@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../utils/api';
 import CattleSection from '../components/farmer/CattleSection';
@@ -10,6 +10,7 @@ import AdviceFeed from '../components/farmer/AdviceFeed';
 import MilkChart from '../components/farmer/MilkChart';
 import VaccinationFeed from '../components/farmer/VaccinationFeed';
 import ProfileSection from '../components/farmer/ProfileSection';
+import CattleTransfer from '../components/farmer/CattleTransfer';
 
 export default function FarmerDashboard() {
   const { user, logout } = useAuth();
@@ -18,9 +19,7 @@ export default function FarmerDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeSection = section || 'home';
-
   const handleLogout = () => { logout(); navigate('/login'); };
-
   const setActiveSection = (id) => {
     navigate(id === 'home' ? '/farmer' : `/farmer/${id}`);
     setSidebarOpen(false);
@@ -34,6 +33,7 @@ export default function FarmerDashboard() {
     { id: 'health', icon: '🌡️', label: 'සෞඛ්‍ය වාර්තා' },
     { id: 'ai', icon: '🧬', label: 'සිංචන ඉල්ලීම' },
     { id: 'vaccination', icon: '📅', label: 'එන්නත් කාලසටහන' },
+    { id: 'transfer', icon: '🔄', label: 'ගව හිමිකාරිත්ව මාරුව' },
     { id: 'advice', icon: '📋', label: 'ලැබුණු උපදෙස්' },
     { id: 'profile', icon: '👤', label: 'පැතිකඩ' },
   ];
@@ -81,13 +81,13 @@ export default function FarmerDashboard() {
             <h1 className="text-xl font-bold">ගව මිතුරු</h1>
             <p className="text-green-200 text-sm mt-1">👨‍🌾 {user?.fullName}</p>
           </div>
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {menuItems.map((item) => (
               <button key={item.id} onClick={() => setActiveSection(item.id)}
                 className={`w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition duration-200 ${
                   activeSection === item.id ? 'bg-white text-green-700 font-semibold' : 'hover:bg-green-600 text-white'
                 }`}>
-                <span>{item.icon}</span><span>{item.label}</span>
+                <span>{item.icon}</span><span className="text-sm">{item.label}</span>
               </button>
             ))}
           </nav>
@@ -108,6 +108,7 @@ export default function FarmerDashboard() {
           {activeSection === 'health' && <HealthReport />}
           {activeSection === 'ai' && <AIRequest />}
           {activeSection === 'vaccination' && <VaccinationFeed />}
+          {activeSection === 'transfer' && <CattleTransfer />}
           {activeSection === 'advice' && <AdviceFeed />}
           {activeSection === 'profile' && <ProfileSection />}
         </div>
@@ -118,8 +119,6 @@ export default function FarmerDashboard() {
 
 function HomeSection({ user, setActiveSection }) {
   const [stats, setStats] = useState({ totalCattle: 0, sickCattle: 0, todayMilk: 0, upcomingVac: 0 });
-
-  useEffect(() => { fetchStats(); }, []);
 
   const fetchStats = async () => {
     try {
@@ -134,21 +133,42 @@ function HomeSection({ user, setActiveSection }) {
         .reduce((sum, r) => sum + (r.totalMilk || 0), 0);
       const sickCattle = cattleRes.data.filter(c => c.status === 'අසනීප').length;
       const upcomingVac = vacRes.data.filter(v => v.status === 'scheduled').length;
-      setStats({ totalCattle: cattleRes.data.length, sickCattle, todayMilk: todayMilk.toFixed(1), upcomingVac });
+      setStats({
+        totalCattle: cattleRes.data.length,
+        sickCattle,
+        todayMilk: todayMilk.toFixed(1),
+        upcomingVac
+      });
     } catch (err) { console.error(err); }
   };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void fetchStats();
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   return (
     <div>
       <h2 className="text-xl md:text-2xl font-bold text-green-700 mb-4 md:mb-6">
         සාදරයෙන් පිළිගනිමු, {user?.fullName}! 👋
       </h2>
+
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
-        <SummaryCard icon="🐄" label="මුළු සතුන්" value={stats.totalCattle} color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('cattle')} />
-        <SummaryCard icon="🤒" label="අසනීප සතුන්" value={stats.sickCattle} color="bg-red-100 text-red-700" onClick={() => setActiveSection('health')} />
-        <SummaryCard icon="🍶" label="අද කිරි (L)" value={stats.todayMilk} color="bg-yellow-100 text-yellow-700" onClick={() => setActiveSection('milk')} />
-        <SummaryCard icon="📅" label="ඉදිරි එන්නත්" value={stats.upcomingVac} color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
+        <SummaryCard icon="🐄" label="මුළු සතුන්" value={stats.totalCattle}
+          color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('cattle')} />
+        <SummaryCard icon="🤒" label="අසනීප සතුන්" value={stats.sickCattle}
+          color="bg-red-100 text-red-700" onClick={() => setActiveSection('health')} />
+        <SummaryCard icon="🍶" label="අද කිරි (L)" value={stats.todayMilk}
+          color="bg-yellow-100 text-yellow-700" onClick={() => setActiveSection('milk')} />
+        <SummaryCard icon="📅" label="ඉදිරි එන්නත්" value={stats.upcomingVac}
+          color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
       </div>
+
+      {/* Quick Actions */}
       <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm">
         <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-3">⚡ ඉක්මන් ක්‍රියා</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -158,8 +178,8 @@ function HomeSection({ user, setActiveSection }) {
           <QuickAction icon="🧬" label="සිංචන ඉල්ලීම" onClick={() => setActiveSection('ai')} />
           <QuickAction icon="📅" label="එන්නත් කාලසටහන" onClick={() => setActiveSection('vaccination')} />
           <QuickAction icon="📊" label="කිරි ප්‍රස්ථාර" onClick={() => setActiveSection('milkchart')} />
+          <QuickAction icon="🔄" label="ගව Transfer" onClick={() => setActiveSection('transfer')} />
           <QuickAction icon="📋" label="ලැබුණු උපදෙස්" onClick={() => setActiveSection('advice')} />
-          <QuickAction icon="👤" label="පැතිකඩ" onClick={() => setActiveSection('profile')} />
         </div>
       </div>
     </div>

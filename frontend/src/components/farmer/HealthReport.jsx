@@ -62,7 +62,7 @@ export default function HealthReport() {
       resetForm();
       fetchData();
       setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
+    } catch {
       setFormError('දෝෂයකි. නැවත උත්සාහ කරන්න');
     }
   };
@@ -88,7 +88,7 @@ export default function HealthReport() {
       setMessage('🗑️ වාර්තාව ඉවත් කරන ලදී');
       fetchData();
       setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
+    } catch {
       setMessage('දෝෂයකි');
     }
   };

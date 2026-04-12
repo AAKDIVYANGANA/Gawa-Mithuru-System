@@ -20,6 +20,8 @@ app.use('/api/ai-requests', require('./routes/aiRequestRoutes'));
 app.use('/api/advice', require('./routes/adviceRoutes'));
 app.use('/api/ldo', require('./routes/ldoRoutes'));
 app.use('/api/vaccinations', require('./routes/vaccinationRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/transfers', require('./routes/transferRoutes'));
 
 // Test Route
 app.get('/', (req, res) => {

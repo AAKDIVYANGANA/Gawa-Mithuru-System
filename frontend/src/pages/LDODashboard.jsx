@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../utils/api';
 
@@ -47,7 +47,7 @@ export default function LDODashboard() {
       {sidebarOpen && (
         <div className="md:hidden bg-blue-800 text-white z-30 shadow-lg">
           {menuItems.map((item) => (
-            <button key={item.id} onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+            <button key={item.id} onClick={() => setActiveSection(item.id)}
               className={`w-full text-left px-6 py-3 flex items-center gap-3 border-b border-blue-700 ${
                 activeSection === item.id ? 'bg-white text-blue-700 font-semibold' : 'hover:bg-blue-700'
               }`}>
@@ -105,24 +105,68 @@ export default function LDODashboard() {
 // Home Section
 function HomeSection({ setActiveSection }) {
   const [stats, setStats] = useState({ farmers: 0, cattle: 0, pendingAI: 0, upcomingVaccinations: 0 });
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchAll = async () => {
+    try {
+      const [statsRes, notifRes] = await Promise.all([
+        API.get('/ldo/stats'),
+        API.get('/notifications')
+      ]);
+      setStats(statsRes.data);
+      setNotifications(notifRes.data);
+      setUnreadCount(notifRes.data.filter(n => !n.isRead).length);
+    } catch (err) { console.error(err); }
+  };
 
   useEffect(() => {
-    API.get('/ldo/stats')
-      .then(res => setStats(res.data))
-      .catch(err => console.error(err));
+    const timeoutId = setTimeout(() => {
+      void fetchAll();
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, []);
+
+  const markRead = async (id) => {
+    try {
+      await API.put(`/notifications/${id}/read`);
+      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) { console.error(err); }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await API.put('/notifications/mark-all-read');
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) { console.error(err); }
+  };
+
+  const notifColor = (type) => {
+    switch (type) {
+      case 'ai_ready': return 'border-green-500 bg-green-50';
+      case 'health_alert': return 'border-red-500 bg-red-50';
+      case 'vaccination_due': return 'border-yellow-500 bg-yellow-50';
+      default: return 'border-blue-400 bg-blue-50';
+    }
+  };
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-blue-700 mb-6">📊 Dashboard Overview</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard icon="👨‍🌾" label="Registered Farmers" value={stats.farmers} color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('directory')} />
         <StatCard icon="🐄" label="Total Cattle" value={stats.cattle} color="bg-green-100 text-green-700" onClick={() => setActiveSection('directory')} />
         <StatCard icon="💉" label="Pending AI Requests" value={stats.pendingAI} color="bg-yellow-100 text-yellow-700" onClick={() => setActiveSection('ai')} />
         <StatCard icon="📅" label="Upcoming Vaccinations" value={stats.upcomingVaccinations} color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { icon: '👨‍🌾', label: 'Farmer Directory', id: 'directory' },
           { icon: '💉', label: 'AI Management', id: 'ai' },
@@ -135,6 +179,71 @@ function HomeSection({ setActiveSection }) {
             <div className="text-xs text-blue-700 font-medium">{q.label}</div>
           </button>
         ))}
+      </div>
+
+      {/* Notifications Panel */}
+      <div className="bg-white rounded-xl shadow p-5">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-gray-700">🔔 Notifications</h3>
+            {unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <button onClick={markAllRead}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium transition">
+              ✅ සියල්ල කියවා ඇත
+            </button>
+          )}
+        </div>
+
+        {notifications.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <div className="text-4xl mb-2">🔔</div>
+            <p className="text-sm">Notifications නොමැත</p>
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {notifications.map(n => (
+              <div key={n._id}
+                className={`rounded-xl p-4 border-l-4 transition ${notifColor(n.type)} ${!n.isRead ? 'shadow-sm' : 'opacity-60'}`}>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold text-sm text-gray-800">{n.title}</span>
+                      {!n.isRead && (
+                        <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">New</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600">{n.message}</p>
+                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-400">
+                      <span>👨‍🌾 {n.from?.fullName}</span>
+                      {n.cattle && <span>🐄 {n.cattle?.name} ({n.cattle?.cattleId})</span>}
+                      <span>🕐 {new Date(n.createdAt).toLocaleString('si-LK')}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 items-end">
+                    {!n.isRead && (
+                      <button onClick={() => markRead(n._id)}
+                        className="bg-white hover:bg-gray-50 text-gray-600 px-2 py-1 rounded-lg text-xs border transition whitespace-nowrap">
+                        ✓ Read
+                      </button>
+                    )}
+                    {n.type === 'ai_ready' && (
+                      <button onClick={() => setActiveSection('ai')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs transition whitespace-nowrap">
+                        💉 AI Manage
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -194,7 +303,7 @@ function DirectorySection() {
               <tr><td colSpan={6} className="text-center py-8 text-gray-400">No cattle found</td></tr>
             ) : filtered.map((c, i) => (
               <tr key={c._id} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
-                <td className="px-4 py-3">{c.farmer?.fullName}<br/><span className="text-xs text-gray-400">{c.farmer?.phone}</span></td>
+                <td className="px-4 py-3">{c.farmer?.fullName}<br /><span className="text-xs text-gray-400">{c.farmer?.phone}</span></td>
                 <td className="px-4 py-3 font-medium">{c.name}</td>
                 <td className="px-4 py-3">{c.cattleId}</td>
                 <td className="px-4 py-3">{c.breed}</td>
@@ -254,7 +363,7 @@ function AISection() {
   };
 
   const statusColor = (s) => {
-    switch(s) {
+    switch (s) {
       case 'pending': return 'bg-yellow-100 text-yellow-700';
       case 'approved': return 'bg-green-100 text-green-700';
       case 'rejected': return 'bg-red-100 text-red-700';
@@ -303,29 +412,25 @@ function AISection() {
                 )}
               </div>
 
-              {/* AI Details Form */}
               {editId === r._id && (
                 <div className="border-t pt-3 mt-2">
                   <p className="text-sm font-semibold text-blue-700 mb-3">📝 Record AI Completion</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div><label className="text-xs text-gray-600">Bull ID</label>
-                      <input type="text" value={aiDetails.bullId} onChange={e => setAiDetails({...aiDetails, bullId: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
-                    <div><label className="text-xs text-gray-600">Semen Breed</label>
-                      <input type="text" value={aiDetails.semenBreed} onChange={e => setAiDetails({...aiDetails, semenBreed: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
-                    <div><label className="text-xs text-gray-600">Batch No</label>
-                      <input type="text" value={aiDetails.batchNo} onChange={e => setAiDetails({...aiDetails, batchNo: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
-                    <div><label className="text-xs text-gray-600">AI Date</label>
-                      <input type="date" value={aiDetails.aiDate} onChange={e => setAiDetails({...aiDetails, aiDate: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
-                    <div><label className="text-xs text-gray-600">PD Date</label>
-                      <input type="date" value={aiDetails.pdDate} onChange={e => setAiDetails({...aiDetails, pdDate: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
-                    <div><label className="text-xs text-gray-600">LDO Notes</label>
-                      <input type="text" value={aiDetails.ldoNotes} onChange={e => setAiDetails({...aiDetails, ldoNotes: e.target.value})}
-                        className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" /></div>
+                    {[
+                      { key: 'bullId', label: 'Bull ID', type: 'text' },
+                      { key: 'semenBreed', label: 'Semen Breed', type: 'text' },
+                      { key: 'batchNo', label: 'Batch No', type: 'text' },
+                      { key: 'aiDate', label: 'AI Date', type: 'date' },
+                      { key: 'pdDate', label: 'PD Date', type: 'date' },
+                      { key: 'ldoNotes', label: 'LDO Notes', type: 'text' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className="text-xs text-gray-600">{f.label}</label>
+                        <input type={f.type} value={aiDetails[f.key]}
+                          onChange={e => setAiDetails({ ...aiDetails, [f.key]: e.target.value })}
+                          className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      </div>
+                    ))}
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => saveAIDetails(r._id)}
@@ -336,7 +441,6 @@ function AISection() {
                 </div>
               )}
 
-              {/* Completed AI Details */}
               {r.status === 'completed' && r.bullId && (
                 <div className="border-t pt-3 mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                   <div><span className="text-gray-500">Bull ID:</span> <span className="font-medium">{r.bullId}</span></div>
@@ -427,7 +531,7 @@ function VaccinationSection() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cattle *</label>
-              <select value={form.cattle} onChange={e => setForm({...form, cattle: e.target.value})}
+              <select value={form.cattle} onChange={e => setForm({ ...form, cattle: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
                 <option value="">Select Cattle</option>
                 {cattle.map(c => <option key={c._id} value={c._id}>{c.name} ({c.cattleId}) - {c.farmer?.fullName}</option>)}
@@ -435,19 +539,19 @@ function VaccinationSection() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vaccine Name *</label>
-              <input type="text" value={form.vaccineName} onChange={e => setForm({...form, vaccineName: e.target.value})}
+              <input type="text" value={form.vaccineName} onChange={e => setForm({ ...form, vaccineName: e.target.value })}
                 placeholder="e.g. FMD Vaccine"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Date *</label>
               <input type="date" value={form.scheduledDate} min={new Date().toISOString().split('T')[0]}
-                onChange={e => setForm({...form, scheduledDate: e.target.value})}
+                onChange={e => setForm({ ...form, scheduledDate: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <input type="text" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}
+              <input type="text" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
                 placeholder="Additional notes..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
@@ -459,7 +563,6 @@ function VaccinationSection() {
         </div>
       )}
 
-      {/* Upcoming */}
       <div className="mb-6">
         <h3 className="font-semibold text-gray-700 mb-3">📅 Upcoming ({upcoming.length})</h3>
         {upcoming.length === 0 ? <p className="text-gray-400 text-sm">No upcoming vaccinations</p> : (
@@ -481,7 +584,6 @@ function VaccinationSection() {
         )}
       </div>
 
-      {/* Completed */}
       <div>
         <h3 className="font-semibold text-gray-700 mb-3">✅ Completed ({completed.length})</h3>
         {completed.length === 0 ? <p className="text-gray-400 text-sm">No completed vaccinations</p> : (
@@ -551,7 +653,7 @@ function AdviceSection() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cattle (Optional)</label>
-            <select value={form.cattle} onChange={e => setForm({...form, cattle: e.target.value})}
+            <select value={form.cattle} onChange={e => setForm({ ...form, cattle: e.target.value })}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
               <option value="">All Cattle</option>
               {filteredCattle.map(c => <option key={c._id} value={c._id}>{c.name} ({c.cattleId})</option>)}
@@ -559,7 +661,7 @@ function AdviceSection() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select value={form.category} onChange={e => setForm({...form, category: e.target.value})}
+            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
               <option value="පෝෂණය">🌿 පෝෂණය</option>
               <option value="සෞඛ්‍යය">🏥 සෞඛ්‍යය</option>
@@ -569,13 +671,13 @@ function AdviceSection() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-            <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+            <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
               placeholder="Advice title"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
-            <textarea value={form.content} onChange={e => setForm({...form, content: e.target.value})}
+            <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}
               placeholder="Write advice here..." rows={4}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
@@ -636,8 +738,6 @@ function HistorySection() {
             <p className="font-bold text-blue-700">{history.cattle?.name} ({history.cattle?.cattleId})</p>
             <p className="text-sm text-gray-600">Farmer: {history.cattle?.farmer?.fullName} • {history.cattle?.farmer?.phone}</p>
           </div>
-
-          {/* Tabs */}
           <div className="flex flex-wrap gap-2 mb-4">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -647,7 +747,6 @@ function HistorySection() {
             ))}
           </div>
 
-          {/* Tab Content */}
           {activeTab === 'health' && (
             <div className="space-y-3">
               {history.health?.length === 0 ? <p className="text-gray-400">No health records</p> :
@@ -740,7 +839,6 @@ function MilkAnalyticsSection() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Group by cattle
   const grouped = {};
   records.forEach(r => {
     const key = r.cattle?._id;
