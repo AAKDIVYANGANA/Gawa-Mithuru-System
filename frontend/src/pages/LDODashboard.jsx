@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/useAuth';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from 'recharts';
 import API from '../utils/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function LDODashboard() {
   const { user, logout } = useAuth();
@@ -25,11 +31,11 @@ export default function LDODashboard() {
     { id: 'advice', icon: '🌾', label: 'Nutrition Advice' },
     { id: 'history', icon: '📜', label: 'Cattle Full History' },
     { id: 'milk', icon: '🥛', label: 'Milk Analytics' },
+    { id: 'milkreport', icon: '📈', label: 'Milk Production Report' },
   ];
 
   return (
     <div className="min-h-screen bg-blue-50">
-      {/* Mobile Header */}
       <div className="bg-blue-700 text-white px-4 py-3 flex items-center justify-between md:hidden sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <span className="text-2xl">👨‍💼</span>
@@ -43,7 +49,6 @@ export default function LDODashboard() {
         </button>
       </div>
 
-      {/* Mobile Menu */}
       {sidebarOpen && (
         <div className="md:hidden bg-blue-800 text-white z-30 shadow-lg">
           {menuItems.map((item) => (
@@ -61,7 +66,6 @@ export default function LDODashboard() {
       )}
 
       <div className="flex">
-        {/* Sidebar Desktop */}
         <div className="hidden md:flex w-64 bg-blue-700 text-white flex-col min-h-screen sticky top-0">
           <div className="p-6 border-b border-blue-600">
             <div className="text-3xl mb-1">👨‍💼</div>
@@ -69,7 +73,7 @@ export default function LDODashboard() {
             <p className="text-blue-200 text-sm">LDO Dashboard</p>
             <p className="text-blue-300 text-xs mt-1">{user?.fullName}</p>
           </div>
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {menuItems.map((item) => (
               <button key={item.id} onClick={() => setActiveSection(item.id)}
                 className={`w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition ${
@@ -87,7 +91,6 @@ export default function LDODashboard() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-4 md:p-8">
           {activeSection === 'home' && <HomeSection setActiveSection={setActiveSection} />}
           {activeSection === 'directory' && <DirectorySection />}
@@ -96,36 +99,35 @@ export default function LDODashboard() {
           {activeSection === 'advice' && <AdviceSection />}
           {activeSection === 'history' && <HistorySection />}
           {activeSection === 'milk' && <MilkAnalyticsSection />}
+          {activeSection === 'milkreport' && <LDOMilkReport />}
         </div>
       </div>
     </div>
   );
 }
 
-// Home Section
 function HomeSection({ setActiveSection }) {
   const [stats, setStats] = useState({ farmers: 0, cattle: 0, pendingAI: 0, upcomingVaccinations: 0 });
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchAll = async () => {
-    try {
-      const [statsRes, notifRes] = await Promise.all([
-        API.get('/ldo/stats'),
-        API.get('/notifications')
-      ]);
-      setStats(statsRes.data);
-      setNotifications(notifRes.data);
-      setUnreadCount(notifRes.data.filter(n => !n.isRead).length);
-    } catch (err) { console.error(err); }
-  };
-
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      void fetchAll();
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
+    let isMounted = true;
+    const load = async () => {
+      try {
+        const [statsRes, notifRes] = await Promise.all([
+          API.get('/ldo/stats'),
+          API.get('/notifications')
+        ]);
+        if (isMounted) {
+          setStats(statsRes.data);
+          setNotifications(notifRes.data);
+          setUnreadCount(notifRes.data.filter(n => !n.isRead).length);
+        }
+      } catch (err) { console.error(err); }
+    };
+    load();
+    return () => { isMounted = false; };
   }, []);
 
   const markRead = async (id) => {
@@ -156,8 +158,6 @@ function HomeSection({ setActiveSection }) {
   return (
     <div>
       <h2 className="text-2xl font-bold text-blue-700 mb-6">📊 Dashboard Overview</h2>
-
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard icon="👨‍🌾" label="Registered Farmers" value={stats.farmers} color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('directory')} />
         <StatCard icon="🐄" label="Total Cattle" value={stats.cattle} color="bg-green-100 text-green-700" onClick={() => setActiveSection('directory')} />
@@ -165,13 +165,12 @@ function HomeSection({ setActiveSection }) {
         <StatCard icon="📅" label="Upcoming Vaccinations" value={stats.upcomingVaccinations} color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { icon: '👨‍🌾', label: 'Farmer Directory', id: 'directory' },
           { icon: '💉', label: 'AI Management', id: 'ai' },
           { icon: '📅', label: 'Vaccinations', id: 'vaccination' },
-          { icon: '🥛', label: 'Milk Analytics', id: 'milk' },
+          { icon: '📈', label: 'Milk Report', id: 'milkreport' },
         ].map(q => (
           <button key={q.id} onClick={() => setActiveSection(q.id)}
             className="bg-white rounded-xl p-4 text-center shadow hover:bg-blue-50 transition border border-blue-100">
@@ -181,25 +180,20 @@ function HomeSection({ setActiveSection }) {
         ))}
       </div>
 
-      {/* Notifications Panel */}
       <div className="bg-white rounded-xl shadow p-5">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-bold text-gray-700">🔔 Notifications</h3>
             {unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {unreadCount}
-              </span>
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{unreadCount}</span>
             )}
           </div>
           {unreadCount > 0 && (
-            <button onClick={markAllRead}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium transition">
+            <button onClick={markAllRead} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
               ✅ සියල්ල කියවා ඇත
             </button>
           )}
         </div>
-
         {notifications.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
             <div className="text-4xl mb-2">🔔</div>
@@ -209,14 +203,12 @@ function HomeSection({ setActiveSection }) {
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {notifications.map(n => (
               <div key={n._id}
-                className={`rounded-xl p-4 border-l-4 transition ${notifColor(n.type)} ${!n.isRead ? 'shadow-sm' : 'opacity-60'}`}>
+                className={`rounded-xl p-4 border-l-4 ${notifColor(n.type)} ${!n.isRead ? 'shadow-sm' : 'opacity-60'}`}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-sm text-gray-800">{n.title}</span>
-                      {!n.isRead && (
-                        <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">New</span>
-                      )}
+                      {!n.isRead && <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">New</span>}
                     </div>
                     <p className="text-sm text-gray-600">{n.message}</p>
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-400">
@@ -259,7 +251,6 @@ function StatCard({ icon, label, value, color, onClick }) {
   );
 }
 
-// Directory Section
 function DirectorySection() {
   const [cattle, setCattle] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -284,7 +275,7 @@ function DirectorySection() {
     <div>
       <h2 className="text-2xl font-bold text-blue-700 mb-4">👨‍🌾 Farmer & Cattle Directory</h2>
       <input type="text" placeholder="Search by farmer, cattle name or tag..."
-        value={search} onChange={(e) => setSearch(e.target.value)}
+        value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400" />
       <div className="bg-white rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
@@ -325,15 +316,12 @@ function DirectorySection() {
   );
 }
 
-// AI Management Section
 function AISection() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [editId, setEditId] = useState(null);
   const [aiDetails, setAiDetails] = useState({ bullId: '', semenBreed: '', batchNo: '', aiDate: '', pdDate: '', ldoNotes: '' });
-
-  useEffect(() => { fetchRequests(); }, []);
 
   const fetchRequests = async () => {
     try {
@@ -342,6 +330,8 @@ function AISection() {
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => { fetchRequests(); }, []);
 
   const updateStatus = async (id, status) => {
     try {
@@ -393,8 +383,8 @@ function AISection() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                     <div><span className="text-gray-500 text-xs">Cattle</span><p>{r.cattle?.name} ({r.cattle?.cattleId})</p></div>
-                    <div><span className="text-gray-500 text-xs">Requested Date</span><p>{r.requestDate?.split('T')[0]}</p></div>
-                    {r.breedPreference && <div><span className="text-gray-500 text-xs">Breed Pref</span><p>{r.breedPreference}</p></div>}
+                    <div><span className="text-gray-500 text-xs">Date</span><p>{r.requestDate?.split('T')[0]}</p></div>
+                    {r.breedPreference && <div><span className="text-gray-500 text-xs">Breed</span><p>{r.breedPreference}</p></div>}
                     {r.notes && <div><span className="text-gray-500 text-xs">Notes</span><p className="text-xs">{r.notes}</p></div>}
                   </div>
                 </div>
@@ -411,7 +401,6 @@ function AISection() {
                     className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-xs font-medium transition">📝 Record AI</button>
                 )}
               </div>
-
               {editId === r._id && (
                 <div className="border-t pt-3 mt-2">
                   <p className="text-sm font-semibold text-blue-700 mb-3">📝 Record AI Completion</p>
@@ -440,7 +429,6 @@ function AISection() {
                   </div>
                 </div>
               )}
-
               {r.status === 'completed' && r.bullId && (
                 <div className="border-t pt-3 mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                   <div><span className="text-gray-500">Bull ID:</span> <span className="font-medium">{r.bullId}</span></div>
@@ -458,7 +446,6 @@ function AISection() {
   );
 }
 
-// Vaccination Section
 function VaccinationSection() {
   const [vaccinations, setVaccinations] = useState([]);
   const [cattle, setCattle] = useState([]);
@@ -467,8 +454,6 @@ function VaccinationSection() {
   const [message, setMessage] = useState('');
   const [formError, setFormError] = useState('');
   const [form, setForm] = useState({ cattle: '', farmer: '', vaccineName: '', scheduledDate: '', notes: '' });
-
-  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
@@ -481,6 +466,8 @@ function VaccinationSection() {
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => { fetchData(); }, []);
 
   const handleSubmit = async () => {
     setFormError('');
@@ -521,9 +508,7 @@ function VaccinationSection() {
           {showForm ? '✕ Cancel' : '+ Schedule Vaccination'}
         </button>
       </div>
-
       {message && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-4 text-sm">{message}</div>}
-
       {showForm && (
         <div className="bg-white rounded-xl shadow p-5 mb-6">
           <h3 className="font-semibold text-gray-700 mb-4">📅 Schedule New Vaccination</h3>
@@ -562,7 +547,6 @@ function VaccinationSection() {
           </div>
         </div>
       )}
-
       <div className="mb-6">
         <h3 className="font-semibold text-gray-700 mb-3">📅 Upcoming ({upcoming.length})</h3>
         {upcoming.length === 0 ? <p className="text-gray-400 text-sm">No upcoming vaccinations</p> : (
@@ -575,15 +559,12 @@ function VaccinationSection() {
                   <p className="text-xs text-gray-400">{v.farmer?.fullName} • {v.scheduledDate?.split('T')[0]}</p>
                 </div>
                 <button onClick={() => markComplete(v._id)}
-                  className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1 rounded-lg text-xs font-medium transition">
-                  ✅ Complete
-                </button>
+                  className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1 rounded-lg text-xs font-medium transition">✅ Complete</button>
               </div>
             ))}
           </div>
         )}
       </div>
-
       <div>
         <h3 className="font-semibold text-gray-700 mb-3">✅ Completed ({completed.length})</h3>
         {completed.length === 0 ? <p className="text-gray-400 text-sm">No completed vaccinations</p> : (
@@ -602,7 +583,6 @@ function VaccinationSection() {
   );
 }
 
-// Advice Section
 function AdviceSection() {
   const [farmers, setFarmers] = useState([]);
   const [cattle, setCattle] = useState([]);
@@ -691,7 +671,6 @@ function AdviceSection() {
   );
 }
 
-// History Section
 function HistorySection() {
   const [cattle, setCattle] = useState([]);
   const [history, setHistory] = useState(null);
@@ -729,9 +708,7 @@ function HistorySection() {
           {cattle.map(c => <option key={c._id} value={c._id}>{c.name} ({c.cattleId}) - {c.farmer?.fullName}</option>)}
         </select>
       </div>
-
       {loading && <div className="text-center py-10 text-gray-400">Loading history...</div>}
-
       {history && !loading && (
         <div>
           <div className="bg-blue-50 rounded-xl p-4 mb-4">
@@ -746,7 +723,6 @@ function HistorySection() {
                 }`}>{t.label}</button>
             ))}
           </div>
-
           {activeTab === 'health' && (
             <div className="space-y-3">
               {history.health?.length === 0 ? <p className="text-gray-400">No health records</p> :
@@ -764,7 +740,6 @@ function HistorySection() {
                 ))}
             </div>
           )}
-
           {activeTab === 'ai' && (
             <div className="space-y-3">
               {history.ai?.length === 0 ? <p className="text-gray-400">No AI records</p> :
@@ -775,7 +750,7 @@ function HistorySection() {
                         <p className="font-medium">AI Request — {a.requestDate?.split('T')[0]}</p>
                         {a.breedPreference && <p className="text-sm text-gray-500">Breed: {a.breedPreference}</p>}
                         {a.bullId && <p className="text-sm text-gray-500">Bull: {a.bullId} • Batch: {a.batchNo}</p>}
-                        {a.aiDate && <p className="text-sm text-gray-500">AI Date: {a.aiDate?.split('T')[0]} • PD: {a.pdDate?.split('T')[0]}</p>}
+                        {a.aiDate && <p className="text-sm text-gray-500">AI: {a.aiDate?.split('T')[0]} • PD: {a.pdDate?.split('T')[0]}</p>}
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         a.status === 'completed' ? 'bg-blue-100 text-blue-700' :
@@ -787,7 +762,6 @@ function HistorySection() {
                 ))}
             </div>
           )}
-
           {activeTab === 'vaccinations' && (
             <div className="space-y-3">
               {history.vaccinations?.length === 0 ? <p className="text-gray-400">No vaccination records</p> :
@@ -804,10 +778,9 @@ function HistorySection() {
                 ))}
             </div>
           )}
-
           {activeTab === 'milk' && (
             <div className="space-y-3">
-              {history.milk?.length === 0 ? <p className="text-gray-400">No milk records (last 7 days)</p> :
+              {history.milk?.length === 0 ? <p className="text-gray-400">No milk records</p> :
                 history.milk?.map(m => (
                   <div key={m._id} className="bg-white rounded-xl p-4 border-l-4 border-green-400">
                     <div className="flex justify-between">
@@ -827,7 +800,6 @@ function HistorySection() {
   );
 }
 
-// Milk Analytics Section
 function MilkAnalyticsSection() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -854,7 +826,7 @@ function MilkAnalyticsSection() {
     <div>
       <h2 className="text-2xl font-bold text-blue-700 mb-6">🥛 Milk Analytics (Last 7 Days)</h2>
       {Object.keys(grouped).length === 0 ? (
-        <div className="text-center py-16 text-gray-400"><div className="text-5xl mb-3">🥛</div><p>No milk records in last 7 days</p></div>
+        <div className="text-center py-16 text-gray-400"><div className="text-5xl mb-3">🥛</div><p>No milk records</p></div>
       ) : (
         <div className="space-y-4">
           {Object.values(grouped).map(g => (
@@ -893,6 +865,201 @@ function MilkAnalyticsSection() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function LDOMilkReport() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('7');
+
+  useEffect(() => {
+    API.get('/ldo/milk-analytics')
+      .then(res => setRecords(res.data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filterByPeriod = (data) => {
+    const days = parseInt(period);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    return data.filter(r => new Date(r.date) >= cutoff);
+  };
+
+  const filtered = filterByPeriod(records);
+  const totalMilk = filtered.reduce((s, r) => s + (r.totalMilk || 0), 0);
+
+  const byFarmer = {};
+  filtered.forEach(r => {
+    const id = r.farmer?._id;
+    if (!id) return;
+    if (!byFarmer[id]) byFarmer[id] = { farmer: r.farmer, total: 0, records: [] };
+    byFarmer[id].total += r.totalMilk || 0;
+    byFarmer[id].records.push(r);
+  });
+
+  const chartData = Object.values(byFarmer).map(f => ({
+    name: f.farmer?.fullName?.split(' ')[0],
+    total: parseFloat(f.total.toFixed(1))
+  }));
+
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const today = new Date().toLocaleDateString('en-GB');
+
+    doc.setFontSize(18);
+    doc.setTextColor(29, 78, 216);
+    doc.text('GawaMithuru - Milk Production Report', 14, 20);
+
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Period: Last ${period} Days`, 14, 30);
+    doc.text(`Generated: ${today}`, 14, 37);
+    doc.text(`Total Milk: ${totalMilk.toFixed(1)}L`, 14, 44);
+    doc.text(`Active Farmers: ${Object.keys(byFarmer).length}`, 14, 51);
+
+    let yPos = 60;
+
+    Object.values(byFarmer).sort((a, b) => b.total - a.total).forEach((f, i) => {
+      doc.setFontSize(12);
+      doc.setTextColor(29, 78, 216);
+      doc.text(`${i + 1}. ${f.farmer?.fullName || 'Unknown'} (${f.farmer?.phone || ''})`, 14, yPos);
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(`Total: ${f.total.toFixed(1)}L`, 160, yPos);
+      yPos += 6;
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Date', 'Cattle', 'Morning (L)', 'Evening (L)', 'Total (L)']],
+        body: f.records
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .map(r => [
+            r.date?.split('T')[0] || '',
+            `${r.cattle?.name} (${r.cattle?.cattleId})`,
+            r.morningMilk?.toString() || '0',
+            r.eveningMilk?.toString() || '0',
+            r.totalMilk?.toString() || '0',
+          ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [29, 78, 216], textColor: 255 },
+        alternateRowStyles: { fillColor: [239, 246, 255] },
+        margin: { left: 14, right: 14 },
+      });
+
+      yPos = doc.lastAutoTable.finalY + 12;
+
+      if (yPos > 260 && i < Object.values(byFarmer).length - 1) {
+        doc.addPage();
+        yPos = 20;
+      }
+    });
+
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text('GawaMithuru - Dairy Management System © 2026', 14, doc.internal.pageSize.height - 10);
+    doc.save(`milk-report-${today.replace(/\//g, '-')}.pdf`);
+  };
+
+  if (loading) return <div className="text-center py-10 text-gray-400">Loading...</div>;
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-blue-700 mb-6">📈 Milk Production Report</h2>
+
+      <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap gap-4 items-end justify-between">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
+          <select value={period} onChange={e => setPeriod(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="7">Last 7 Days</option>
+            <option value="14">Last 14 Days</option>
+            <option value="30">Last Month</option>
+          </select>
+        </div>
+        <button onClick={generatePDF}
+          disabled={filtered.length === 0}
+          className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 disabled:opacity-50">
+          📄 PDF Download
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+          <p className="text-xs text-green-600">Total Milk</p>
+          <p className="text-2xl font-bold text-green-700">{totalMilk.toFixed(1)}L</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+          <p className="text-xs text-blue-600">Active Farmers</p>
+          <p className="text-2xl font-bold text-blue-700">{Object.keys(byFarmer).length}</p>
+        </div>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+          <p className="text-xs text-yellow-600">Total Records</p>
+          <p className="text-2xl font-bold text-yellow-700">{filtered.length}</p>
+        </div>
+      </div>
+
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-xl shadow p-5 mb-6">
+          <h3 className="font-semibold text-gray-700 mb-4">📊 Farmer Production Comparison</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={v => [`${v}L`, 'Total Milk']} />
+              <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {Object.values(byFarmer).sort((a, b) => b.total - a.total).map((f, i) => (
+          <div key={i} className="bg-white rounded-xl shadow p-4">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <p className="font-bold text-gray-800">{f.farmer?.fullName}</p>
+                <p className="text-xs text-gray-500">📱 {f.farmer?.phone}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-green-600">{f.total.toFixed(1)}L</p>
+                <p className="text-xs text-gray-400">{period} day total</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-gray-50">
+                  <th className="px-2 py-1 text-left">Date</th>
+                  <th className="px-2 py-1 text-left">Cattle</th>
+                  <th className="px-2 py-1 text-left">Morning</th>
+                  <th className="px-2 py-1 text-left">Evening</th>
+                  <th className="px-2 py-1 text-left">Total</th>
+                </tr></thead>
+                <tbody>
+                  {f.records.sort((a, b) => new Date(b.date) - new Date(a.date)).map(r => (
+                    <tr key={r._id} className="border-t">
+                      <td className="px-2 py-1">{r.date?.split('T')[0]}</td>
+                      <td className="px-2 py-1">{r.cattle?.name}</td>
+                      <td className="px-2 py-1 text-blue-600">{r.morningMilk}L</td>
+                      <td className="px-2 py-1 text-yellow-600">{r.eveningMilk}L</td>
+                      <td className="px-2 py-1 font-semibold text-green-600">{r.totalMilk}L</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+        {Object.keys(byFarmer).length === 0 && (
+          <div className="text-center py-16 text-gray-400">
+            <div className="text-5xl mb-3">🥛</div>
+            <p>No milk records for selected period</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

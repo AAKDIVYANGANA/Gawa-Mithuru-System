@@ -11,6 +11,7 @@ import MilkChart from '../components/farmer/MilkChart';
 import VaccinationFeed from '../components/farmer/VaccinationFeed';
 import ProfileSection from '../components/farmer/ProfileSection';
 import CattleTransfer from '../components/farmer/CattleTransfer';
+import MilkReport from '../components/farmer/MilkReport';
 
 export default function FarmerDashboard() {
   const { user, logout } = useAuth();
@@ -30,6 +31,7 @@ export default function FarmerDashboard() {
     { id: 'cattle', icon: '🐄', label: 'ගව විස්තර' },
     { id: 'milk', icon: '🍶', label: 'දෛනික කිරි' },
     { id: 'milkchart', icon: '📊', label: 'කිරි ප්‍රස්ථාර' },
+    { id: 'milkreport', icon: '📈', label: 'කිරි නිෂ්පාදන වාර්තාව' },
     { id: 'health', icon: '🌡️', label: 'සෞඛ්‍ය වාර්තා' },
     { id: 'ai', icon: '🧬', label: 'සිංචන ඉල්ලීම' },
     { id: 'vaccination', icon: '📅', label: 'එන්නත් කාලසටහන' },
@@ -105,6 +107,7 @@ export default function FarmerDashboard() {
           {activeSection === 'cattle' && <CattleSection />}
           {activeSection === 'milk' && <MilkInput />}
           {activeSection === 'milkchart' && <MilkChart />}
+          {activeSection === 'milkreport' && <MilkReport />}
           {activeSection === 'health' && <HealthReport />}
           {activeSection === 'ai' && <AIRequest />}
           {activeSection === 'vaccination' && <VaccinationFeed />}

@@ -116,7 +116,7 @@ exports.getMilkAnalytics = async (req, res) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const records = await MilkRecord.find({ date: { $gte: sevenDaysAgo } })
       .populate('cattle', 'name cattleId')
-      .populate('farmer', 'fullName')
+      .populate('farmer', 'fullName phone')
       .sort({ date: -1 });
     res.json(records);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
