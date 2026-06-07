@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 // Register - Farmer
 const registerFarmer = async (req, res) => {
   try {
-    const { fullName, nic, phone, email, address, district, password, role } = req.body;
+    const { fullName, nic, phone, email, address, district, dsDivision, password, role } = req.body;
 
     if (!fullName) return res.status(400).json({ message: 'සම්පූර්ණ නම ඇතුළත් කරන්න' });
     if (!password) return res.status(400).json({ message: 'මුරපදය ඇතුළත් කරන්න' });
@@ -16,6 +16,8 @@ const registerFarmer = async (req, res) => {
     if (userRole === 'farmer') {
       if (!nic) return res.status(400).json({ message: 'NIC අංකය ඇතුළත් කරන්න' });
       if (!phone) return res.status(400).json({ message: 'දුරකථන අංකය ඇතුළත් කරන්න' });
+      if (!district) return res.status(400).json({ message: 'දිස්ත්‍රික්කය තෝරන්න' });
+      if (!dsDivision) return res.status(400).json({ message: 'DS කොට්ඨාශය තෝරන්න' });
 
       const nicExists = await User.findOne({ nic });
       if (nicExists) return res.status(400).json({ message: 'මෙම NIC අංකය දැනටමත් ලියාපදිංචි වී ඇත' });
@@ -41,6 +43,7 @@ const registerFarmer = async (req, res) => {
       email: email || undefined,
       address: address || undefined,
       district: district || undefined,
+      dsDivision: dsDivision || undefined,
       password: hashedPassword,
       role: userRole
     });
@@ -52,7 +55,7 @@ const registerFarmer = async (req, res) => {
   }
 };
 
-// Login - Farmer uses phone, LDO/Vet uses email
+// Login
 const login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -62,6 +65,9 @@ const login = async (req, res) => {
     });
 
     if (!user) return res.status(400).json({ message: 'පරිශීලකයා හමු නොවීය' });
+
+    if (user.isActive === false)
+      return res.status(403).json({ message: 'ගිණුම අක්‍රිය කර ඇත. Admin සම්බන්ධ කරගන්න.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'මුරපදය වැරදිය' });
@@ -78,7 +84,11 @@ const login = async (req, res) => {
       user: {
         id: user._id,
         fullName: user.fullName,
-        role: user.role
+        role: user.role,
+        phone: user.phone,
+        email: user.email,
+        district: user.district,
+        dsDivision: user.dsDivision
       }
     });
 

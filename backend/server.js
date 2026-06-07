@@ -24,6 +24,7 @@ app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/transfers', require('./routes/transferRoutes'));
 app.use('/api/vet', require('./routes/vetRoutes'));
 app.use('/api/prescriptions', require('./routes/prescriptionRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Test Route
 app.get('/', (req, res) => {
