@@ -7,7 +7,7 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+// Middlewarepm
 app.use(cors());
 app.use(express.json());
 
@@ -22,6 +22,8 @@ app.use('/api/ldo', require('./routes/ldoRoutes'));
 app.use('/api/vaccinations', require('./routes/vaccinationRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/transfers', require('./routes/transferRoutes'));
+app.use('/api/vet', require('./routes/vetRoutes'));
+app.use('/api/prescriptions', require('./routes/prescriptionRoutes'));
 
 // Test Route
 app.get('/', (req, res) => {

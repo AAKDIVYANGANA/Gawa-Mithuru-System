@@ -12,6 +12,7 @@ import VaccinationFeed from '../components/farmer/VaccinationFeed';
 import ProfileSection from '../components/farmer/ProfileSection';
 import CattleTransfer from '../components/farmer/CattleTransfer';
 import MilkReport from '../components/farmer/MilkReport';
+import Prescriptions from '../components/farmer/Prescriptions';
 
 export default function FarmerDashboard() {
   const { user, logout } = useAuth();
@@ -36,6 +37,7 @@ export default function FarmerDashboard() {
     { id: 'ai', icon: '🧬', label: 'සිංචන ඉල්ලීම' },
     { id: 'vaccination', icon: '📅', label: 'එන්නත් කාලසටහන' },
     { id: 'transfer', icon: '🔄', label: 'ගව හිමිකාරිත්ව මාරුව' },
+    { id: 'prescriptions', icon: '💊', label: 'බෙහෙත් වට්ටෝරු' },
     { id: 'advice', icon: '📋', label: 'ලැබුණු උපදෙස්' },
     { id: 'profile', icon: '👤', label: 'පැතිකඩ' },
   ];
@@ -112,6 +114,7 @@ export default function FarmerDashboard() {
           {activeSection === 'ai' && <AIRequest />}
           {activeSection === 'vaccination' && <VaccinationFeed />}
           {activeSection === 'transfer' && <CattleTransfer />}
+          {activeSection === 'prescriptions' && <Prescriptions />}
           {activeSection === 'advice' && <AdviceFeed />}
           {activeSection === 'profile' && <ProfileSection />}
         </div>
@@ -123,34 +126,32 @@ export default function FarmerDashboard() {
 function HomeSection({ user, setActiveSection }) {
   const [stats, setStats] = useState({ totalCattle: 0, sickCattle: 0, todayMilk: 0, upcomingVac: 0 });
 
-  const fetchStats = async () => {
-    try {
-      const [cattleRes, milkRes, vacRes] = await Promise.all([
-        API.get('/cattle'),
-        API.get('/milk'),
-        API.get('/vaccinations')
-      ]);
-      const today = new Date().toISOString().split('T')[0];
-      const todayMilk = milkRes.data
-        .filter(r => r.date?.split('T')[0] === today)
-        .reduce((sum, r) => sum + (r.totalMilk || 0), 0);
-      const sickCattle = cattleRes.data.filter(c => c.status === 'අසනීප').length;
-      const upcomingVac = vacRes.data.filter(v => v.status === 'scheduled').length;
-      setStats({
-        totalCattle: cattleRes.data.length,
-        sickCattle,
-        todayMilk: todayMilk.toFixed(1),
-        upcomingVac
-      });
-    } catch (err) { console.error(err); }
-  };
-
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      void fetchStats();
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
+    let isMounted = true;
+    const load = async () => {
+      try {
+        const [cattleRes, milkRes, vacRes] = await Promise.all([
+          API.get('/cattle'),
+          API.get('/milk'),
+          API.get('/vaccinations')
+        ]);
+        if (!isMounted) return;
+        const today = new Date().toISOString().split('T')[0];
+        const todayMilk = milkRes.data
+          .filter(r => r.date?.split('T')[0] === today)
+          .reduce((sum, r) => sum + (r.totalMilk || 0), 0);
+        const sickCattle = cattleRes.data.filter(c => c.status === 'අසනීප').length;
+        const upcomingVac = vacRes.data.filter(v => v.status === 'scheduled').length;
+        setStats({
+          totalCattle: cattleRes.data.length,
+          sickCattle,
+          todayMilk: todayMilk.toFixed(1),
+          upcomingVac
+        });
+      } catch (err) { console.error(err); }
+    };
+    load();
+    return () => { isMounted = false; };
   }, []);
 
   return (
@@ -159,7 +160,6 @@ function HomeSection({ user, setActiveSection }) {
         සාදරයෙන් පිළිගනිමු, {user?.fullName}! 👋
       </h2>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
         <SummaryCard icon="🐄" label="මුළු සතුන්" value={stats.totalCattle}
           color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('cattle')} />
@@ -171,7 +171,6 @@ function HomeSection({ user, setActiveSection }) {
           color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
       </div>
 
-      {/* Quick Actions */}
       <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm">
         <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-3">⚡ ඉක්මන් ක්‍රියා</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -182,6 +181,7 @@ function HomeSection({ user, setActiveSection }) {
           <QuickAction icon="📅" label="එන්නත් කාලසටහන" onClick={() => setActiveSection('vaccination')} />
           <QuickAction icon="📊" label="කිරි ප්‍රස්ථාර" onClick={() => setActiveSection('milkchart')} />
           <QuickAction icon="🔄" label="ගව Transfer" onClick={() => setActiveSection('transfer')} />
+          <QuickAction icon="💊" label="බෙහෙත් වට්ටෝරු" onClick={() => setActiveSection('prescriptions')} />
           <QuickAction icon="📋" label="ලැබුණු උපදෙස්" onClick={() => setActiveSection('advice')} />
         </div>
       </div>
