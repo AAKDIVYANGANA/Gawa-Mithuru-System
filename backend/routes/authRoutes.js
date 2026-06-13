@@ -14,7 +14,7 @@ router.post('/login', login);
 // Update Profile
 router.put('/profile', protect, async (req, res) => {
   try {
-    const { fullName, address, district, phone } = req.body;
+    const { fullName, address, district, dsDivision, phone } = req.body;
 
     if (!fullName) return res.status(400).json({ message: 'සම්පූර්ණ නම ඇතුළත් කරන්න' });
 
@@ -30,7 +30,27 @@ router.put('/profile', protect, async (req, res) => {
     }
 
     const updateData = { fullName, address, district };
+    if (dsDivision) updateData.dsDivision = dsDivision;
     if (phone) updateData.phone = phone;
+
+    // Re-assign LDO/Vet if DS Division changed
+    if (dsDivision) {
+      const currentUser = await User.findById(req.user.id);
+      if (dsDivision !== currentUser.dsDivision) {
+        const ldo = await User.findOne({
+          role: 'ldo',
+          assignedDsDivisions: dsDivision,
+          isActive: { $ne: false }
+        });
+        const vet = await User.findOne({
+          role: 'vet',
+          assignedDsDivisions: dsDivision,
+          isActive: { $ne: false }
+        });
+        updateData.assignedLDO = ldo?._id || null;
+        updateData.assignedVet = vet?._id || null;
+      }
+    }
 
     const user = await User.findByIdAndUpdate(
       req.user.id,

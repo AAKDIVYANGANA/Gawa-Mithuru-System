@@ -1,11 +1,12 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/useAuth';
+import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import FarmerDashboard from './pages/FarmerDashboard';
 import LDODashboard from './pages/LDODashboard';
 import VetDashboard from './pages/VetDashboard';
 import Landing from './pages/Landing';
+import AdminDashboard from './pages/AdminDashboard';
 
 function ProtectedRoute({ children, role }) {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ function PublicRoute({ children }) {
     if (user.role === 'farmer') return <Navigate to="/farmer" replace />;
     if (user.role === 'ldo') return <Navigate to="/ldo" replace />;
     if (user.role === 'vet') return <Navigate to="/vet" replace />;
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
   }
   return children;
 }
@@ -36,6 +38,8 @@ function App() {
       <Route path="/ldo/:section" element={<ProtectedRoute role="ldo"><LDODashboard /></ProtectedRoute>} />
       <Route path="/vet" element={<ProtectedRoute role="vet"><VetDashboard /></ProtectedRoute>} />
       <Route path="/vet/:section" element={<ProtectedRoute role="vet"><VetDashboard /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/:section" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

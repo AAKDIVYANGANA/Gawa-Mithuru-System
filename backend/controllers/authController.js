@@ -12,7 +12,6 @@ const registerFarmer = async (req, res) => {
 
     const userRole = role || 'farmer';
 
-    // Farmer validation
     if (userRole === 'farmer') {
       if (!nic) return res.status(400).json({ message: 'NIC අංකය ඇතුළත් කරන්න' });
       if (!phone) return res.status(400).json({ message: 'දුරකථන අංකය ඇතුළත් කරන්න' });
@@ -26,17 +25,34 @@ const registerFarmer = async (req, res) => {
       if (phoneExists) return res.status(400).json({ message: 'මෙම දුරකථන අංකය දැනටමත් ලියාපදිංචි වී ඇත' });
     }
 
-    // LDO / Vet validation
     if (userRole === 'ldo' || userRole === 'vet') {
       if (!email) return res.status(400).json({ message: 'Email ඇතුළත් කරන්න' });
-
       const emailExists = await User.findOne({ email });
       if (emailExists) return res.status(400).json({ message: 'මෙම Email දැනටමත් ලියාපදිංචි වී ඇත' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await User.create({
+    // Auto-assign LDO and Vet based on DS Division
+    let assignedLDO = null;
+    let assignedVet = null;
+
+    if (userRole === 'farmer' && dsDivision) {
+      const ldo = await User.findOne({
+        role: 'ldo',
+        assignedDsDivisions: dsDivision,
+        isActive: { $ne: false }
+      });
+      const vet = await User.findOne({
+        role: 'vet',
+        assignedDsDivisions: dsDivision,
+        isActive: { $ne: false }
+      });
+      assignedLDO = ldo?._id || null;
+      assignedVet = vet?._id || null;
+    }
+
+    const newUser = await User.create({
       fullName,
       nic: nic || undefined,
       phone: phone || undefined,
@@ -45,12 +61,19 @@ const registerFarmer = async (req, res) => {
       district: district || undefined,
       dsDivision: dsDivision || undefined,
       password: hashedPassword,
-      role: userRole
+      role: userRole,
+      assignedLDO,
+      assignedVet,
     });
 
-    res.status(201).json({ message: 'ලියාපදිංචිය සාර්ථකයි!' });
+    res.status(201).json({
+      message: 'ලියාපදිංචිය සාර්ථකයි!',
+      assignedLDO: assignedLDO ? true : false,
+      assignedVet: assignedVet ? true : false,
+    });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -88,7 +111,9 @@ const login = async (req, res) => {
         phone: user.phone,
         email: user.email,
         district: user.district,
-        dsDivision: user.dsDivision
+        dsDivision: user.dsDivision,
+        assignedLDO: user.assignedLDO,
+        assignedVet: user.assignedVet,
       }
     });
 

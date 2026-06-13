@@ -1,156 +1,193 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import API from '../utils/api';
+import locations from '../data/locations';
 
 export default function Register() {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    nic: '',
-    phone: '',
-    address: '',
-    district: '',
-    password: '',
-    confirmPassword: ''
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [form, setForm] = useState({
+    fullName: '', nic: '', phone: '', address: '',
+    district: '', dsDivision: '', password: '', confirmPassword: ''
+  });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
 
-  const districts = [
-    'කොළඹ', 'ගම්පහ', 'කළුතර', 'නුවර', 'මාතලේ', 'නුවරඑළිය',
-    'ගාල්ල', 'මාතර', 'හම්බන්තොට', 'යාපනය', 'කිළිනොච්චි',
-    'මන්නාරම', 'වවුනියාව', 'මුලතිව්', 'තිඹිරිගස්යාය', 'අම්පාර',
-    'ත්‍රිකුණාමළය', 'කුරුණෑගල', 'පුත්තලම', 'අනුරාධපුරය',
-    'පොළොන්නරුව', 'බදුල්ල', 'මොනරාගල', 'රත්නපුර', 'කෑගල්ල'
-  ];
+  const districts = Object.keys(locations);
+  const dsDivisions = form.district ? locations[form.district] : [];
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const validate = () => {
+    const e = {};
+    if (!form.fullName.trim()) e.fullName = 'සම්පූර්ණ නම ඇතුළත් කරන්න';
+    if (!form.nic.trim()) e.nic = 'NIC අංකය ඇතුළත් කරන්න';
+    else if (!/^\d{9}[vVxX]$|^\d{12}$/.test(form.nic)) e.nic = 'NIC අංකය නිවැරදි නැත (9 + V/X හෝ 12 ඉලක්කම්)';
+    if (!form.phone.trim()) e.phone = 'දුරකථන අංකය ඇතුළත් කරන්න';
+    else if (!/^0\d{9}$/.test(form.phone)) e.phone = 'දුරකථන අංකය නිවැරදි නැත (07XXXXXXXX)';
+    if (!form.district) e.district = 'දිස්ත්‍රික්කය තෝරන්න';
+    if (!form.dsDivision) e.dsDivision = 'DS කොට්ඨාශය තෝරන්න';
+    if (!form.password) e.password = 'මුරපදය ඇතුළත් කරන්න';
+    else if (form.password.length < 6) e.password = 'මුරපදය අවම වශයෙන් අකුරු 6ක් විය යුතුය';
+    if (form.password !== form.confirmPassword) e.confirmPassword = 'මුරපද දෙක ගැලපෙන්නේ නැත';
+    return e;
   };
 
-  const handleRegister = async (e) => {
+  const handleDistrictChange = (e) => {
+    setForm({ ...form, district: e.target.value, dsDivision: '' });
+    if (errors.district) setErrors({ ...errors, district: '', dsDivision: '' });
+  };
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (errors[e.target.name]) setErrors({ ...errors, [e.target.name]: '' });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    // Validations
-    if (!formData.fullName.trim()) return setError('සම්පූර්ණ නම ඇතුළත් කරන්න');
-    if (!formData.nic.trim()) return setError('NIC අංකය ඇතුළත් කරන්න');
-    if (!formData.phone.trim()) return setError('දුරකථන අංකය ඇතුළත් කරන්න');
-    if (!/^0[0-9]{9}$/.test(formData.phone)) return setError('දුරකථන අංකය වලංගු නැත - උදා: 0771234567 (ඉලක්කම් 10ක්)');
-    if (!formData.address.trim()) return setError('ලිපිනය ඇතුළත් කරන්න');
-    if (!formData.district) return setError('දිස්ත්‍රික්කය තෝරන්න');
-    if (!formData.password) return setError('මුරපදය ඇතුළත් කරන්න');
-    if (formData.password.length < 6) return setError('මුරපදය අවම වශයෙන් අකුරු 6ක් විය යුතුය');
-    if (formData.password !== formData.confirmPassword) return setError('මුරපද දෙක ගැලපෙන්නේ නෑ');
-
+    setServerError('');
+    const e2 = validate();
+    if (Object.keys(e2).length > 0) { setErrors(e2); return; }
     setLoading(true);
     try {
-      await API.post('/auth/register', {
-        fullName: formData.fullName,
-        nic: formData.nic,
-        phone: formData.phone,
-        address: formData.address,
-        district: formData.district,
-        password: formData.password
+      const res = await API.post('/auth/register', {
+        fullName: form.fullName,
+        nic: form.nic,
+        phone: form.phone,
+        address: form.address,
+        district: form.district,
+        dsDivision: form.dsDivision,
+        password: form.password,
       });
-      setSuccess('ලියාපදිංචිය සාර්ථකයි! පිවිසෙන්න.');
-      setTimeout(() => navigate('/login'), 2000);
+
+      let msg = 'ලියාපදිංචිය සාර්ථකයි!';
+      if (res.data.assignedLDO) msg += ' ✅ LDO නිලධාරියෙකු assign කරන ලදී.';
+      else msg += ' ⚠️ ඔබේ DS Division සඳහා LDO නිලධාරියෙකු තවම assign නොවී ඇත.';
+      if (res.data.assignedVet) msg += ' ✅ පශු වෛද්‍යවරයෙකු assign කරන ලදී.';
+      else msg += ' ⚠️ ඔබේ DS Division සඳහා පශු වෛද්‍යවරයෙකු තවම assign නොවී ඇත.';
+
+      navigate('/login', { state: { message: msg } });
     } catch (err) {
-      setError(err.response?.data?.message || 'ලියාපදිංචිය අසාර්ථකයි');
+      setServerError(err.response?.data?.message || 'ලියාපදිංචිය අසාර්ථකයි');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-green-50 flex items-center justify-center px-4 py-8">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8">
 
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <div className="text-5xl mb-2">🐄</div>
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🐄</div>
           <h1 className="text-2xl font-bold text-green-700">ගව මිතුරු</h1>
-          <p className="text-gray-500 text-sm">නව ගොවි ලියාපදිංචිය</p>
+          <p className="text-gray-500 text-sm mt-1">නව ගොවි ගිණුමක් සාදන්න</p>
         </div>
 
-        {error && (
-          <div className="bg-red-100 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm">
-            {error}
+        {serverError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl mb-5 text-sm">
+            ⚠️ {serverError}
           </div>
         )}
 
-        {success && (
-          <div className="bg-green-100 text-green-600 px-4 py-2 rounded-lg mb-4 text-sm">
-            {success}
-          </div>
-        )}
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
-        <form onSubmit={handleRegister} className="space-y-4" noValidate>
+          {/* Full Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">සම්පූර්ණ නම</label>
-            <input type="text" name="fullName" value={formData.fullName} onChange={handleChange}
-              placeholder="ඔබේ සම්පූර්ණ නම" required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">සම්පූර්ණ නම *</label>
+            <input type="text" name="fullName" value={form.fullName} onChange={handleChange}
+              placeholder="ඔබේ සම්පූර්ණ නම"
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.fullName ? 'border-red-400' : 'border-gray-300'}`} />
+            {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName}</p>}
           </div>
 
+          {/* NIC */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">NIC අංකය</label>
-            <input type="text" name="nic" value={formData.nic} onChange={handleChange}
-              placeholder="NIC අංකය" required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">NIC අංකය *</label>
+            <input type="text" name="nic" value={form.nic} onChange={handleChange}
+              placeholder="123456789V හෝ 123456789012"
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.nic ? 'border-red-400' : 'border-gray-300'}`} />
+            {errors.nic && <p className="text-red-500 text-xs mt-1">{errors.nic}</p>}
           </div>
 
+          {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">දුරකථන අංකය</label>
-            <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
-              placeholder="07XXXXXXXX" required maxLength={10}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
-            <p className="text-gray-400 text-xs mt-1">ඉලක්කම් 10ක් ඇතුළත් කරන්න (උදා: 0771234567)</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">දුරකථන අංකය *</label>
+            <input type="tel" name="phone" value={form.phone} onChange={handleChange}
+              placeholder="07XXXXXXXX"
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.phone ? 'border-red-400' : 'border-gray-300'}`} />
+            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
           </div>
 
+          {/* Address */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ලිපිනය</label>
-            <input type="text" name="address" value={formData.address} onChange={handleChange}
-              placeholder="ගොවිපළේ ලිපිනය" required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            <input type="text" name="address" value={form.address} onChange={handleChange}
+              placeholder="ගෙදර ලිපිනය"
+              className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400" />
           </div>
 
+          {/* District */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">දිස්ත්‍රික්කය</label>
-            <select name="district" value={formData.district} onChange={handleChange} required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400">
+            <label className="block text-sm font-medium text-gray-700 mb-1">දිස්ත්‍රික්කය *</label>
+            <select name="district" value={form.district} onChange={handleDistrictChange}
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.district ? 'border-red-400' : 'border-gray-300'}`}>
               <option value="">දිස්ත්‍රික්කය තෝරන්න</option>
-              {districts.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
+              {districts.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
+            {errors.district && <p className="text-red-500 text-xs mt-1">{errors.district}</p>}
           </div>
 
+          {/* DS Division */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">මුරපදය</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange}
-              placeholder="අවම අකුරු 6ක්" required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">DS කොට්ඨාශය *</label>
+            <select name="dsDivision" value={form.dsDivision}
+              onChange={e => {
+                setForm({ ...form, dsDivision: e.target.value });
+                if (errors.dsDivision) setErrors({ ...errors, dsDivision: '' });
+              }}
+              disabled={!form.district}
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100 ${errors.dsDivision ? 'border-red-400' : 'border-gray-300'}`}>
+              <option value="">DS කොට්ඨාශය තෝරන්න</option>
+              {dsDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {errors.dsDivision && <p className="text-red-500 text-xs mt-1">{errors.dsDivision}</p>}
           </div>
 
+          {/* DS Division Info */}
+          {form.dsDivision && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+              📍 ඔබේ DS කොට්ඨාශය අනුව LDO නිලධාරියෙකු සහ පශු වෛද්‍යවරයෙකු ස්වයංක්‍රීයව assign කරනු ලැබේ.
+            </div>
+          )}
+
+          {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">මුරපදය තහවුරු කරන්න</label>
-            <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange}
-              placeholder="මුරපදය නැවත ඇතුළත් කරන්න" required
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">මුරපදය *</label>
+            <input type="password" name="password" value={form.password} onChange={handleChange}
+              placeholder="අවම අකුරු 6ක්"
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.password ? 'border-red-400' : 'border-gray-300'}`} />
+            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
           </div>
 
+          {/* Confirm Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">මුරපදය නැවත ඇතුළත් කරන්න *</label>
+            <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange}
+              placeholder="මුරපදය නැවත ඇතුළත් කරන්න"
+              className={`w-full border rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${errors.confirmPassword ? 'border-red-400' : 'border-gray-300'}`} />
+            {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
+          </div>
+
+          {/* Submit */}
           <button type="submit" disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition duration-200">
-            {loading ? 'ලියාපදිංචි වෙමින්...' : 'ලියාපදිංචි වන්න'}
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold transition disabled:opacity-50 mt-2">
+            {loading ? '⏳ ලියාපදිංචි වෙමින්...' : '✅ ලියාපදිංචි වන්න'}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center text-sm text-gray-500 mt-6">
           දැනටමත් ගිණුමක් තිබේද?{' '}
-          <Link to="/login" className="text-green-600 font-medium hover:underline">
+          <Link to="/login" className="text-green-600 hover:text-green-700 font-medium">
             පිවිසෙන්න
           </Link>
         </p>

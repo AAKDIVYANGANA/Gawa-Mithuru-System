@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../utils/api';
 import CattleSection from '../components/farmer/CattleSection';
@@ -44,8 +44,6 @@ export default function FarmerDashboard() {
 
   return (
     <div className="min-h-screen bg-green-50">
-
-      {/* Mobile Header */}
       <div className="bg-green-700 text-white px-4 py-3 flex items-center justify-between md:hidden sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🐄</span>
@@ -59,7 +57,6 @@ export default function FarmerDashboard() {
         </button>
       </div>
 
-      {/* Mobile Dropdown */}
       {sidebarOpen && (
         <div className="md:hidden bg-green-800 text-white z-30 shadow-lg">
           {menuItems.map((item) => (
@@ -78,7 +75,6 @@ export default function FarmerDashboard() {
       )}
 
       <div className="flex">
-        {/* Sidebar Desktop */}
         <div className="hidden md:flex w-64 bg-green-700 text-white flex-col min-h-screen sticky top-0">
           <div className="p-6 border-b border-green-600">
             <div className="text-3xl mb-1">🐄</div>
@@ -103,7 +99,6 @@ export default function FarmerDashboard() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">
           {activeSection === 'home' && <HomeSection user={user} setActiveSection={setActiveSection} />}
           {activeSection === 'cattle' && <CattleSection />}
@@ -118,6 +113,99 @@ export default function FarmerDashboard() {
           {activeSection === 'advice' && <AdviceFeed />}
           {activeSection === 'profile' && <ProfileSection />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AssignedOfficers() {
+  const [officers, setOfficers] = useState({ ldo: null, vet: null });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      try {
+        const res = await API.get('/farmer/my-officers');
+        if (isMounted) setOfficers(res.data);
+      } catch (err) { console.error(err); }
+      finally { if (isMounted) setLoading(false); }
+    };
+    load();
+    return () => { isMounted = false; };
+  }, []);
+
+  if (loading) return <div className="text-gray-400 text-sm text-center py-4">Loading...</div>;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      {/* LDO Card */}
+      <div className={`rounded-xl p-4 border-2 ${officers.ldo ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
+            👨‍💼
+          </div>
+          <div>
+            <p className="font-bold text-blue-700 text-sm">LDO නිලධාරී</p>
+            <p className="text-xs text-gray-500">Livestock Development Officer</p>
+          </div>
+        </div>
+        {officers.ldo ? (
+          <div className="space-y-2">
+            <p className="font-semibold text-gray-800 text-lg">{officers.ldo.fullName}</p>
+            <p className="text-sm text-gray-600">📍 {officers.ldo.district}</p>
+            {officers.ldo.phone ? (
+              <a href={`tel:${officers.ldo.phone}`}
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition w-full">
+                📞 {officers.ldo.phone}
+              </a>
+            ) : (
+              <div className="flex items-center justify-center gap-2 bg-gray-200 text-gray-500 px-4 py-2.5 rounded-lg text-sm w-full">
+                📧 {officers.ldo.email}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-3">
+            <p className="text-gray-400 text-sm">LDO නිලධාරියෙකු assign නොවී ඇත</p>
+            <p className="text-gray-300 text-xs mt-1">Admin සම්බන්ධ කරගන්න</p>
+          </div>
+        )}
+      </div>
+
+      {/* Vet Card */}
+      <div className={`rounded-xl p-4 border-2 ${officers.vet ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-2xl">
+            👨‍⚕️
+          </div>
+          <div>
+            <p className="font-bold text-purple-700 text-sm">පශු වෛද්‍යවරයා</p>
+            <p className="text-xs text-gray-500">Veterinary Officer</p>
+          </div>
+        </div>
+        {officers.vet ? (
+          <div className="space-y-2">
+            <p className="font-semibold text-gray-800 text-lg">{officers.vet.fullName}</p>
+            <p className="text-sm text-gray-600">📍 {officers.vet.district}</p>
+            {officers.vet.phone ? (
+              <a href={`tel:${officers.vet.phone}`}
+                className="flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition w-full">
+                📞 {officers.vet.phone}
+              </a>
+            ) : (
+              <div className="flex items-center justify-center gap-2 bg-gray-200 text-gray-500 px-4 py-2.5 rounded-lg text-sm w-full">
+                📧 {officers.vet.email}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-3">
+            <p className="text-gray-400 text-sm">පශු වෛද්‍යවරයෙකු assign නොවී ඇත</p>
+            <p className="text-gray-300 text-xs mt-1">Admin සම්බන්ධ කරගන්න</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -160,7 +248,7 @@ function HomeSection({ user, setActiveSection }) {
         සාදරයෙන් පිළිගනිමු, {user?.fullName}! 👋
       </h2>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-6">
         <SummaryCard icon="🐄" label="මුළු සතුන්" value={stats.totalCattle}
           color="bg-blue-100 text-blue-700" onClick={() => setActiveSection('cattle')} />
         <SummaryCard icon="🤒" label="අසනීප සතුන්" value={stats.sickCattle}
@@ -171,6 +259,15 @@ function HomeSection({ user, setActiveSection }) {
           color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('vaccination')} />
       </div>
 
+      {/* Assigned Officers */}
+      <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm mb-6">
+        <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-4">
+          📞 ඔබේ නිලධාරීන්
+        </h3>
+        <AssignedOfficers />
+      </div>
+
+      {/* Quick Actions */}
       <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm">
         <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-3">⚡ ඉක්මන් ක්‍රියා</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

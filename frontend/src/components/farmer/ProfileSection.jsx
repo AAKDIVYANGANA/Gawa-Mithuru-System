@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/useAuth';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import API from '../../utils/api';
+import locations from '../../data/locations';
 
 export default function ProfileSection() {
   const { user, login, logout } = useAuth();
@@ -12,20 +13,15 @@ export default function ProfileSection() {
   const [activeTab, setActiveTab] = useState('profile');
 
   const [form, setForm] = useState({
-    fullName: '', address: '', district: '', phone: ''
+    fullName: '', address: '', district: '', dsDivision: '', phone: ''
   });
 
   const [pwForm, setPwForm] = useState({
     currentPassword: '', newPassword: '', confirmPassword: ''
   });
 
-  const districts = [
-    'කොළඹ', 'ගම්පහ', 'කළුතර', 'නුවර', 'මාතලේ', 'නුවරඑළිය',
-    'ගාල්ල', 'මාතර', 'හම්බන්තොට', 'යාපනය', 'කිළිනොච්චි',
-    'මන්නාරම', 'වවුනියාව', 'මුලතිව්', 'තිඹිරිගස්යාය', 'අම්පාර',
-    'ත්‍රිකුණාමළය', 'කුරුණෑගල', 'පුත්තලම', 'අනුරාධපුරය',
-    'පොළොන්නරුව', 'බදුල්ල', 'මොනරාගල', 'රත්නපුර', 'කෑගල්ල'
-  ];
+  const districts = Object.keys(locations);
+  const dsDivisions = form.district ? locations[form.district] : [];
 
   useEffect(() => {
     if (user) {
@@ -33,16 +29,21 @@ export default function ProfileSection() {
         fullName: user.fullName || '',
         address: user.address || '',
         district: user.district || '',
+        dsDivision: user.dsDivision || '',
         phone: user.phone || ''
       });
     }
   }, [user]);
 
+  const handleDistrictChange = (e) => {
+    setForm({ ...form, district: e.target.value, dsDivision: '' });
+  };
+
   const handleProfileUpdate = async () => {
     setFormError('');
     if (!form.fullName.trim()) return setFormError('සම්පූර්ණ නම ඇතුළත් කරන්න');
-    if (!form.address.trim()) return setFormError('ලිපිනය ඇතුළත් කරන්න');
     if (!form.district) return setFormError('දිස්ත්‍රික්කය තෝරන්න');
+    if (!form.dsDivision) return setFormError('DS කොට්ඨාශය තෝරන්න');
     if (form.phone && !/^0[0-9]{9}$/.test(form.phone))
       return setFormError('දුරකථන අංකය වලංගු නැත - උදා: 0771234567');
 
@@ -51,13 +52,9 @@ export default function ProfileSection() {
       const res = await API.put('/auth/profile', form);
       const token = localStorage.getItem('token');
 
-      // Phone changed → force logout
       if (form.phone && form.phone !== user.phone) {
         setMessage('✅ දුරකථන අංකය වෙනස් කරන ලදී. නැවත login කරන්න!');
-        setTimeout(() => {
-          logout();
-          navigate('/login');
-        }, 2000);
+        setTimeout(() => { logout(); navigate('/login'); }, 2000);
       } else {
         login(res.data.user, token);
         setMessage('✅ පැතිකඩ යාවත්කාලීන කරන ලදී');
@@ -85,10 +82,7 @@ export default function ProfileSection() {
       });
       setMessage('✅ මුරපදය වෙනස් කරන ලදී. නැවත login කරන්න!');
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setTimeout(() => {
-        logout();
-        navigate('/login');
-      }, 2000);
+      setTimeout(() => { logout(); navigate('/login'); }, 2000);
     } catch (err) {
       setFormError(err.response?.data?.message || 'වර්තමාන මුරපදය වැරදිය');
     } finally {
@@ -108,7 +102,7 @@ export default function ProfileSection() {
         <div>
           <h3 className="text-lg font-bold text-gray-800">{user?.fullName}</h3>
           <p className="text-sm text-gray-500">📱 {user?.phone}</p>
-          <p className="text-sm text-gray-500">🪪 NIC: {user?.nic}</p>
+          <p className="text-sm text-gray-500">📍 {user?.district} {user?.dsDivision ? `— ${user?.dsDivision}` : ''}</p>
           <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
             ගොවියා
           </span>
@@ -161,31 +155,49 @@ export default function ProfileSection() {
               <input type="tel" value={form.phone} maxLength={10}
                 onChange={e => setForm({ ...form, phone: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
-              <p className="text-xs text-yellow-600 mt-1">⚠️ වෙනස් කළොත් නැවත පද්ධතියට පිවිසීමට (Login) සිදු වේ</p>
+              <p className="text-xs text-yellow-600 mt-1">⚠️ වෙනස් කළොත් නැවත Login සිදු වේ</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">NIC අංකය</label>
-              <input type="text" value={user?.nic} disabled
+              <input type="text" value={user?.nic || ''} disabled
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-400 cursor-not-allowed" />
               <p className="text-xs text-gray-400 mt-1">NIC අංකය වෙනස් කළ නොහැක</p>
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">ලිපිනය *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ලිපිනය</label>
               <input type="text" value={form.address}
                 onChange={e => setForm({ ...form, address: e.target.value })}
                 placeholder="ගොවිපළේ ලිපිනය"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400" />
             </div>
 
+            {/* District */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">දිස්ත්‍රික්කය *</label>
-              <select value={form.district} onChange={e => setForm({ ...form, district: e.target.value })}
+              <select value={form.district} onChange={handleDistrictChange}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400">
                 <option value="">දිස්ත්‍රික්කය තෝරන්න</option>
                 {districts.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
+            </div>
+
+            {/* DS Division */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">DS කොට්ඨාශය *</label>
+              <select value={form.dsDivision}
+                onChange={e => setForm({ ...form, dsDivision: e.target.value })}
+                disabled={!form.district}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 disabled:bg-gray-100">
+                <option value="">DS කොට්ඨාශය තෝරන්න</option>
+                {dsDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {form.dsDivision && (
+                <p className="text-xs text-blue-600 mt-1">
+                  ⚠️ DS කොට්ඨාශය වෙනස් කළොත් LDO/Vet re-assign වේ
+                </p>
+              )}
             </div>
           </div>
 

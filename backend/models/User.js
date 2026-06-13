@@ -11,6 +11,8 @@ const userSchema = new mongoose.Schema({
   district: { type: String },
   dsDivision: { type: String },
   assignedDsDivisions: [{ type: String }],
+  assignedLDO: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  assignedVet: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
