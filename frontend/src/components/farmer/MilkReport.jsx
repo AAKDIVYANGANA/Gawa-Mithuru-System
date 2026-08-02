@@ -77,7 +77,7 @@ export default function MilkReport() {
 
   return (
     <div>
-      <h2 className="text-xl md:text-2xl font-bold text-green-700 mb-6">📈 Advanced කිරි නිෂ්පාදන වාර්තාව</h2>
+      <h2 className="text-xl md:text-2xl font-bold text-green-700 mb-6">📈 කිරි නිෂ්පාදන වාර්තාව</h2>
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap gap-4 items-end">
