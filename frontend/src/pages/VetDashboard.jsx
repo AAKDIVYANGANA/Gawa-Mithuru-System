@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../utils/api';
 
@@ -26,7 +26,6 @@ export default function VetDashboard() {
 
   return (
     <div className="min-h-screen bg-purple-50">
-      {/* Mobile Header */}
       <div className="bg-purple-700 text-white px-4 py-3 flex items-center justify-between md:hidden sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <span className="text-2xl">👨‍⚕️</span>
@@ -40,7 +39,6 @@ export default function VetDashboard() {
         </button>
       </div>
 
-      {/* Mobile Menu */}
       {sidebarOpen && (
         <div className="md:hidden bg-purple-800 text-white z-30 shadow-lg">
           {menuItems.map((item) => (
@@ -58,7 +56,6 @@ export default function VetDashboard() {
       )}
 
       <div className="flex">
-        {/* Sidebar Desktop */}
         <div className="hidden md:flex w-64 bg-purple-700 text-white flex-col min-h-screen sticky top-0">
           <div className="p-6 border-b border-purple-600">
             <div className="text-3xl mb-1">👨‍⚕️</div>
@@ -84,7 +81,6 @@ export default function VetDashboard() {
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 p-4 md:p-8">
           {activeSection === 'home' && <HomeSection setActiveSection={setActiveSection} />}
           {activeSection === 'alerts' && <AlertsSection />}
@@ -99,28 +95,90 @@ export default function VetDashboard() {
 
 function HomeSection({ setActiveSection }) {
   const [stats, setStats] = useState({ totalAlerts: 0, pendingReviews: 0, totalCattle: 0, totalPrescriptions: 0 });
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
       try {
-        const res = await API.get('/vet/stats');
-        if (isMounted) setStats(res.data);
+        const [statsRes, notifRes] = await Promise.all([
+          API.get('/vet/stats'),
+          API.get('/notifications')
+        ]);
+        if (isMounted) {
+          setStats(statsRes.data);
+          setNotifications(notifRes.data.filter(n => n.type === 'health_alert'));
+        }
       } catch (err) { console.error(err); }
     };
     load();
     return () => { isMounted = false; };
   }, []);
 
+  const markRead = async (id) => {
+    try {
+      await API.put(`/notifications/${id}/read`);
+      setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+    } catch (err) { console.error(err); }
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-purple-700 mb-6">🏥 Veterinary Dashboard</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard icon="⚠️" label="Total Alerts" value={stats.totalAlerts} color="bg-red-100 text-red-700" onClick={() => setActiveSection('alerts')} />
         <StatCard icon="🔍" label="Pending Reviews" value={stats.pendingReviews} color="bg-orange-100 text-orange-700" onClick={() => setActiveSection('alerts')} />
         <StatCard icon="🐄" label="Total Cattle" value={stats.totalCattle} color="bg-green-100 text-green-700" onClick={() => setActiveSection('cattle')} />
         <StatCard icon="💊" label="Prescriptions" value={stats.totalPrescriptions} color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('prescriptions')} />
       </div>
+
+      {/* Emergency Health Alert Notifications */}
+      {notifications.length > 0 && (
+        <div className="bg-red-50 border-2 border-red-400 rounded-xl p-4 mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-red-700 text-lg">🚨 Emergency Health Alerts</h3>
+            <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {notifications.filter(n => !n.isRead).length} New
+            </span>
+          </div>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {notifications.map(n => (
+              <div key={n._id} className={`bg-white rounded-lg p-3 border-l-4 border-red-500 flex justify-between items-start ${!n.isRead ? 'shadow-sm' : 'opacity-60'}`}>
+                <div className="flex-1">
+                  <p className="font-semibold text-red-700 text-sm">{n.title}</p>
+                  <p className="text-sm text-gray-600 mt-0.5">{n.message}</p>
+                  <p className="text-xs text-gray-400 mt-1">🕐 {new Date(n.createdAt).toLocaleString('si-LK')}</p>
+                </div>
+                <div className="flex flex-col gap-1 items-end ml-2">
+                  {!n.isRead && (
+                    <button onClick={() => markRead(n._id)}
+                      className="bg-white hover:bg-gray-50 text-gray-600 px-2 py-0.5 rounded text-xs border transition">
+                      ✓ Read
+                    </button>
+                  )}
+                  <button onClick={() => setActiveSection('alerts')}
+                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded text-xs transition whitespace-nowrap">
+                    View Alert
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setActiveSection('alerts')}
+            className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition">
+            ⚠️ View all Health Alerts 
+          </button>
+        </div>
+      )}
+
+      {/* No alerts message */}
+      {notifications.length === 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-center">
+          <p className="text-green-600 text-sm font-medium">✅ No emergency health alerts</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { icon: '⚠️', label: 'Health Alerts', id: 'alerts' },
@@ -522,7 +580,6 @@ function CattleSection() {
       <input type="text" placeholder="Search by cattle name, tag or farmer..."
         value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400" />
-
       <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead className="bg-purple-600 text-white">
