@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -17,7 +17,6 @@ export default function LDODashboard() {
 
   const activeSection = section || 'home';
   const handleLogout = () => { logout(); navigate('/login'); };
-
   const setActiveSection = (id) => {
     navigate(id === 'home' ? '/ldo' : `/ldo/${id}`);
     setSidebarOpen(false);
@@ -150,7 +149,6 @@ function HomeSection({ setActiveSection }) {
     switch (type) {
       case 'ai_ready': return 'border-green-500 bg-green-50';
       case 'health_alert': return 'border-red-500 bg-red-50';
-      case 'vaccination_due': return 'border-yellow-500 bg-yellow-50';
       default: return 'border-blue-400 bg-blue-50';
     }
   };
@@ -230,6 +228,9 @@ function HomeSection({ setActiveSection }) {
                         💉 AI Manage
                       </button>
                     )}
+                    {n.type === 'health_alert' && (
+                      <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full">🚨 Health Alert</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -255,6 +256,8 @@ function DirectorySection() {
   const [cattle, setCattle] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedPedigree, setSelectedPedigree] = useState(null);
+  const [pedigreeLoading, setPedigreeLoading] = useState(false);
 
   useEffect(() => {
     API.get('/ldo/cattle')
@@ -262,6 +265,15 @@ function DirectorySection() {
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, []);
+
+  const fetchPedigree = async (id) => {
+    setPedigreeLoading(true);
+    try {
+      const res = await API.get(`/cattle/${id}/lifecycle`);
+      setSelectedPedigree(res.data);
+    } catch (err) { console.error(err); }
+    finally { setPedigreeLoading(false); }
+  };
 
   const filtered = cattle.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -277,41 +289,157 @@ function DirectorySection() {
       <input type="text" placeholder="Search by farmer, cattle name or tag..."
         value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400" />
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+
+      <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead className="bg-blue-600 text-white">
             <tr>
               <th className="px-4 py-3 text-left">Farmer</th>
-              <th className="px-4 py-3 text-left">Cattle Name</th>
+              <th className="px-4 py-3 text-left">Cattle</th>
               <th className="px-4 py-3 text-left">Tag No</th>
               <th className="px-4 py-3 text-left">Breed</th>
-              <th className="px-4 py-3 text-left">DOB</th>
               <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Sire</th>
+              <th className="px-4 py-3 text-left">Action</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">No cattle found</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400">No cattle found</td></tr>
             ) : filtered.map((c, i) => (
               <tr key={c._id} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50'}>
                 <td className="px-4 py-3">{c.farmer?.fullName}<br /><span className="text-xs text-gray-400">{c.farmer?.phone}</span></td>
                 <td className="px-4 py-3 font-medium">{c.name}</td>
                 <td className="px-4 py-3">{c.cattleId}</td>
                 <td className="px-4 py-3">{c.breed}</td>
-                <td className="px-4 py-3">{c.dob?.split('T')[0]}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                     c.status === 'සෞඛ්‍යසම්පන්න' ? 'bg-green-100 text-green-700' :
                     c.status === 'අසනීප' ? 'bg-red-100 text-red-700' :
                     c.status === 'ගර්භනී' ? 'bg-yellow-100 text-yellow-700' :
+                    c.status === 'මළ' ? 'bg-gray-100 text-gray-700' :
                     'bg-blue-100 text-blue-700'
                   }`}>{c.status}</span>
+                </td>
+                <td className="px-4 py-3 text-xs text-blue-700 font-medium">{c.sire || '-'}</td>
+                <td className="px-4 py-3">
+                  <button onClick={() => fetchPedigree(c._id)}
+                    className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1 rounded-lg text-xs font-medium transition">
+                    🌳 Pedigree
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {pedigreeLoading && <div className="text-center py-6 text-gray-400">Loading pedigree...</div>}
+      {selectedPedigree && !pedigreeLoading && (
+        <PedigreePanel cattle={selectedPedigree} onClose={() => setSelectedPedigree(null)} color="blue" />
+      )}
+    </div>
+  );
+}
+
+function PedigreePanel({ cattle, onClose, color = "blue" }) {
+  const [currentTime] = useState(() => Date.now());
+
+  const calcAge = (dob) => {
+    if (!dob) return '-';
+    const diff = currentTime - new Date(dob).getTime();
+    const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365));
+    const months = Math.floor(diff / (1000 * 60 * 60 * 24 * 30));
+    if (years > 0) return `${years}y ${months % 12}m`;
+    return `${months}m`;
+  };
+
+  const headerBg = color === 'blue' ? 'bg-blue-600' : 'bg-purple-600';
+  const borderColor = color === 'blue' ? 'border-blue-200' : 'border-purple-200';
+  const titleColor = color === 'blue' ? 'text-blue-700' : 'text-purple-700';
+
+  return (
+    <div className={`bg-white rounded-xl shadow p-5 border ${borderColor}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className={`font-bold ${titleColor} text-lg`}>🌳 Pedigree — {cattle.name} ({cattle.cattleId})</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+      </div>
+
+      <div className={`${headerBg} text-white rounded-xl p-4 text-center mb-4`}>
+        <p className="text-2xl mb-1">🐄</p>
+        <p className="font-bold text-lg">{cattle.name}</p>
+        <p className="text-white text-sm opacity-80">#{cattle.cattleId} • {cattle.breed} • {cattle.gender || 'ගැහැණු'}</p>
+        <p className="text-white text-xs mt-1 opacity-70">{calcAge(cattle.dob)} • {cattle.status}</p>
+        <p className="text-white text-xs opacity-70">Farmer: {cattle.farmer?.fullName} ({cattle.farmer?.phone})</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <h4 className="font-semibold text-blue-700 mb-2">🐂 Sire (පිය ගොනා)</h4>
+          {cattle.sire ? (
+            <div className="bg-white rounded-lg p-3">
+              <p className="font-semibold text-gray-800">{cattle.sire}</p>
+              <p className="text-xs text-blue-600 mt-1">✅ AI Bull ID — LDO recorded</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-gray-400 text-sm">No sire data</p>
+              <p className="text-xs text-gray-400 mt-1">AI completion pending</p>
+            </div>
+          )}
+        </div>
+        <div className="bg-pink-50 border border-pink-200 rounded-xl p-4">
+          <h4 className="font-semibold text-pink-700 mb-2">🐄 Dam (මව)</h4>
+          {cattle.dam ? (
+            <div className="bg-white rounded-lg p-3">
+              <p className="font-semibold text-gray-800">{cattle.dam.name}</p>
+              <p className="text-xs text-gray-500">#{cattle.dam.cattleId}</p>
+            </div>
+          ) : <p className="text-gray-400 text-sm">No dam data recorded</p>}
+        </div>
+      </div>
+
+      {cattle.offspring?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+          <h4 className="font-semibold text-gray-700 mb-3">🐮 Offspring ({cattle.offspring.length})</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {cattle.offspring.map(o => (
+              <div key={o._id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="font-semibold text-sm text-gray-800">{o.name}</p>
+                <p className="text-xs text-gray-500">#{o.cattleId}</p>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  o.status === 'සෞඛ්‍යසම්පන්න' ? 'bg-green-100 text-green-700' :
+                  o.status === 'මළ' ? 'bg-gray-100 text-gray-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>{o.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cattle.lifecycleEvents?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <h4 className="font-semibold text-gray-700 mb-3">📅 Lifecycle Events</h4>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {[...cattle.lifecycleEvents].reverse().map((ev, i) => (
+              <div key={i} className="flex items-start gap-3 p-2 bg-gray-50 rounded-lg">
+                <span className="text-lg">
+                  {ev.event === 'born' ? '🐮' :
+                   ev.event === 'pregnant' ? '🤰' :
+                   ev.event === 'calved' ? '🎉' :
+                   ev.event === 'ai' ? '💉' :
+                   ev.event === 'died' ? '💀' : '📌'}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-800 capitalize">{ev.event}</p>
+                  <p className="text-xs text-gray-500">{ev.date?.split('T')[0]} — {ev.notes}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -345,10 +473,10 @@ function AISection() {
   const saveAIDetails = async (id) => {
     try {
       await API.put(`/ldo/ai-requests/${id}`, { ...aiDetails, status: 'completed' });
-      setMessage('✅ AI details saved');
+      setMessage('✅ AI details saved — Cattle Sire field auto-updated!');
       setEditId(null);
       fetchRequests();
-      setTimeout(() => setMessage(''), 3000);
+      setTimeout(() => setMessage(''), 4000);
     } catch (err) { console.error(err); }
   };
 
@@ -384,7 +512,7 @@ function AISection() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                     <div><span className="text-gray-500 text-xs">Cattle</span><p>{r.cattle?.name} ({r.cattle?.cattleId})</p></div>
                     <div><span className="text-gray-500 text-xs">Date</span><p>{r.requestDate?.split('T')[0]}</p></div>
-                    {r.breedPreference && <div><span className="text-gray-500 text-xs">Breed</span><p>{r.breedPreference}</p></div>}
+                    {r.breedPreference && <div><span className="text-gray-500 text-xs">Breed Pref</span><p>{r.breedPreference}</p></div>}
                     {r.notes && <div><span className="text-gray-500 text-xs">Notes</span><p className="text-xs">{r.notes}</p></div>}
                   </div>
                 </div>
@@ -401,12 +529,14 @@ function AISection() {
                     className="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1 rounded-lg text-xs font-medium transition">📝 Record AI</button>
                 )}
               </div>
+
               {editId === r._id && (
                 <div className="border-t pt-3 mt-2">
-                  <p className="text-sm font-semibold text-blue-700 mb-3">📝 Record AI Completion</p>
+                  <p className="text-sm font-semibold text-blue-700 mb-1">📝 Record AI Completion</p>
+                  <p className="text-xs text-gray-500 mb-3">Bull ID සටහන් කළ පසු ගවයාගේ Pedigree Sire field ස්වයංක්‍රීයව update වේ</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {[
-                      { key: 'bullId', label: 'Bull ID', type: 'text' },
+                      { key: 'bullId', label: 'Bull ID *', type: 'text' },
                       { key: 'semenBreed', label: 'Semen Breed', type: 'text' },
                       { key: 'batchNo', label: 'Batch No', type: 'text' },
                       { key: 'aiDate', label: 'AI Date', type: 'date' },
@@ -423,19 +553,23 @@ function AISection() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => saveAIDetails(r._id)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm transition">💾 Save</button>
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm transition">💾 Save & Update Sire</button>
                     <button onClick={() => setEditId(null)}
                       className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-1.5 rounded-lg text-sm transition">Cancel</button>
                   </div>
                 </div>
               )}
+
               {r.status === 'completed' && r.bullId && (
-                <div className="border-t pt-3 mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                  <div><span className="text-gray-500">Bull ID:</span> <span className="font-medium">{r.bullId}</span></div>
-                  <div><span className="text-gray-500">Semen Breed:</span> <span className="font-medium">{r.semenBreed}</span></div>
-                  <div><span className="text-gray-500">Batch No:</span> <span className="font-medium">{r.batchNo}</span></div>
-                  <div><span className="text-gray-500">AI Date:</span> <span className="font-medium">{r.aiDate?.split('T')[0]}</span></div>
-                  <div><span className="text-gray-500">PD Date:</span> <span className="font-medium">{r.pdDate?.split('T')[0]}</span></div>
+                <div className="border-t pt-3 mt-2">
+                  <p className="text-xs text-green-600 font-medium mb-2">✅ AI Completed — Cattle Sire auto-updated</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                    <div><span className="text-gray-500">Bull ID:</span> <span className="font-medium">{r.bullId}</span></div>
+                    <div><span className="text-gray-500">Semen Breed:</span> <span className="font-medium">{r.semenBreed}</span></div>
+                    <div><span className="text-gray-500">Batch No:</span> <span className="font-medium">{r.batchNo}</span></div>
+                    <div><span className="text-gray-500">AI Date:</span> <span className="font-medium">{r.aiDate?.split('T')[0]}</span></div>
+                    <div><span className="text-gray-500">PD Date:</span> <span className="font-medium">{r.pdDate?.split('T')[0]}</span></div>
+                  </div>
                 </div>
               )}
             </div>
@@ -748,8 +882,8 @@ function HistorySection() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium">AI Request — {a.requestDate?.split('T')[0]}</p>
-                        {a.breedPreference && <p className="text-sm text-gray-500">Breed: {a.breedPreference}</p>}
-                        {a.bullId && <p className="text-sm text-gray-500">Bull: {a.bullId} • Batch: {a.batchNo}</p>}
+                        {a.breedPreference && <p className="text-sm text-gray-500">Breed Pref: {a.breedPreference}</p>}
+                        {a.bullId && <p className="text-sm text-blue-600 font-medium">🐂 Bull: {a.bullId} ({a.semenBreed}) • Batch: {a.batchNo}</p>}
                         {a.aiDate && <p className="text-sm text-gray-500">AI: {a.aiDate?.split('T')[0]} • PD: {a.pdDate?.split('T')[0]}</p>}
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -908,20 +1042,16 @@ function LDOMilkReport() {
   const generatePDF = () => {
     const doc = new jsPDF();
     const today = new Date().toLocaleDateString('en-GB');
-
     doc.setFontSize(18);
     doc.setTextColor(29, 78, 216);
     doc.text('GawaMithuru - Milk Production Report', 14, 20);
-
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Period: Last ${period} Days`, 14, 30);
     doc.text(`Generated: ${today}`, 14, 37);
     doc.text(`Total Milk: ${totalMilk.toFixed(1)}L`, 14, 44);
     doc.text(`Active Farmers: ${Object.keys(byFarmer).length}`, 14, 51);
-
     let yPos = 60;
-
     Object.values(byFarmer).sort((a, b) => b.total - a.total).forEach((f, i) => {
       doc.setFontSize(12);
       doc.setTextColor(29, 78, 216);
@@ -930,33 +1060,24 @@ function LDOMilkReport() {
       doc.setTextColor(100);
       doc.text(`Total: ${f.total.toFixed(1)}L`, 160, yPos);
       yPos += 6;
-
       autoTable(doc, {
         startY: yPos,
         head: [['Date', 'Cattle', 'Morning (L)', 'Evening (L)', 'Total (L)']],
-        body: f.records
-          .sort((a, b) => new Date(b.date) - new Date(a.date))
-          .map(r => [
-            r.date?.split('T')[0] || '',
-            `${r.cattle?.name} (${r.cattle?.cattleId})`,
-            r.morningMilk?.toString() || '0',
-            r.eveningMilk?.toString() || '0',
-            r.totalMilk?.toString() || '0',
-          ]),
+        body: f.records.sort((a, b) => new Date(b.date) - new Date(a.date)).map(r => [
+          r.date?.split('T')[0] || '',
+          `${r.cattle?.name} (${r.cattle?.cattleId})`,
+          r.morningMilk?.toString() || '0',
+          r.eveningMilk?.toString() || '0',
+          r.totalMilk?.toString() || '0',
+        ]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [29, 78, 216], textColor: 255 },
         alternateRowStyles: { fillColor: [239, 246, 255] },
         margin: { left: 14, right: 14 },
       });
-
       yPos = doc.lastAutoTable.finalY + 12;
-
-      if (yPos > 260 && i < Object.values(byFarmer).length - 1) {
-        doc.addPage();
-        yPos = 20;
-      }
+      if (yPos > 260 && i < Object.values(byFarmer).length - 1) { doc.addPage(); yPos = 20; }
     });
-
     doc.setFontSize(8);
     doc.setTextColor(150);
     doc.text('GawaMithuru - Dairy Management System © 2026', 14, doc.internal.pageSize.height - 10);
@@ -968,7 +1089,6 @@ function LDOMilkReport() {
   return (
     <div>
       <h2 className="text-2xl font-bold text-blue-700 mb-6">📈 Milk Production Report</h2>
-
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap gap-4 items-end justify-between">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
@@ -979,13 +1099,11 @@ function LDOMilkReport() {
             <option value="30">Last Month</option>
           </select>
         </div>
-        <button onClick={generatePDF}
-          disabled={filtered.length === 0}
+        <button onClick={generatePDF} disabled={filtered.length === 0}
           className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 disabled:opacity-50">
           📄 PDF Download
         </button>
       </div>
-
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
           <p className="text-xs text-green-600">Total Milk</p>
@@ -1000,7 +1118,6 @@ function LDOMilkReport() {
           <p className="text-2xl font-bold text-yellow-700">{filtered.length}</p>
         </div>
       </div>
-
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl shadow p-5 mb-6">
           <h3 className="font-semibold text-gray-700 mb-4">📊 Farmer Production Comparison</h3>
@@ -1015,7 +1132,6 @@ function LDOMilkReport() {
           </ResponsiveContainer>
         </div>
       )}
-
       <div className="space-y-4">
         {Object.values(byFarmer).sort((a, b) => b.total - a.total).map((f, i) => (
           <div key={i} className="bg-white rounded-xl shadow p-4">

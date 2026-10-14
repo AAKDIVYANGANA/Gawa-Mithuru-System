@@ -6,7 +6,21 @@ const HealthReport = require('../models/HealthReport');
 const MilkRecord = require('../models/MilkRecord');
 const Vaccination = require('../models/Vaccination');
 
-// Get all farmers
+exports.getStats = async (req, res) => {
+  try {
+    const today = new Date();
+    const in7Days = new Date();
+    in7Days.setDate(today.getDate() + 7);
+    const [farmers, cattle, pendingAI, upcomingVaccinations] = await Promise.all([
+      User.countDocuments({ role: 'farmer' }),
+      Cattle.countDocuments(),
+      AIRequest.countDocuments({ status: 'pending' }),
+      Vaccination.countDocuments({ scheduledDate: { $gte: today, $lte: in7Days }, status: 'scheduled' })
+    ]);
+    res.json({ farmers, cattle, pendingAI, upcomingVaccinations });
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+};
+
 exports.getFarmers = async (req, res) => {
   try {
     const farmers = await User.find({ role: 'farmer' }).select('-password').sort({ createdAt: -1 });
@@ -14,15 +28,17 @@ exports.getFarmers = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Get all cattle
 exports.getAllCattle = async (req, res) => {
   try {
-    const cattle = await Cattle.find().populate('farmer', 'fullName phone district').sort({ createdAt: -1 });
+    const cattle = await Cattle.find()
+      .populate('farmer', 'fullName phone district')
+      .populate('dam', 'name cattleId')
+      .populate('offspring', 'name cattleId status')
+      .sort({ createdAt: -1 });
     res.json(cattle);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Get all AI requests
 exports.getAIRequests = async (req, res) => {
   try {
     const requests = await AIRequest.find()
@@ -33,20 +49,38 @@ exports.getAIRequests = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Update AI request
 exports.updateAIRequest = async (req, res) => {
   try {
     const { status, ldoNotes, bullId, semenBreed, batchNo, aiDate, pdDate } = req.body;
+
     const request = await AIRequest.findByIdAndUpdate(
       req.params.id,
       { status, ldoNotes, bullId, semenBreed, batchNo, aiDate, pdDate },
       { new: true }
     ).populate('farmer', 'fullName phone').populate('cattle', 'name cattleId');
+
+    if (!request) return res.status(404).json({ message: 'Request not found' });
+
+    // AI complete → lifecycle event only — NO Cattle.sire update
+    if (status === 'completed' && bullId) {
+      await Cattle.findByIdAndUpdate(request.cattle._id, {
+        $push: {
+          lifecycleEvents: {
+            event: 'ai',
+            date: aiDate || new Date(),
+            notes: `AI සිංසේචනය — Bull: ${bullId}, Breed: ${semenBreed || '-'}, Batch: ${batchNo || '-'}`
+          }
+        }
+      });
+    }
+
     res.json(request);
-  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
 };
 
-// Get health alerts
 exports.getHealthAlerts = async (req, res) => {
   try {
     const alerts = await HealthReport.find({ isAlert: true })
@@ -57,19 +91,16 @@ exports.getHealthAlerts = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Send nutrition advice
 exports.sendAdvice = async (req, res) => {
   try {
     const { farmer, cattle, title, content, category } = req.body;
-    const advice = new NutritionAdvice({
-      ldo: req.user.id, farmer, cattle, title, content, category
-    });
+    const NutritionAdvice = require('../models/NutritionAdvice');
+    const advice = new NutritionAdvice({ ldo: req.user.id, farmer, cattle, title, content, category });
     await advice.save();
     res.status(201).json(advice);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Get vaccinations
 exports.getVaccinations = async (req, res) => {
   try {
     const vaccinations = await Vaccination.find()
@@ -80,7 +111,6 @@ exports.getVaccinations = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Add vaccination
 exports.addVaccination = async (req, res) => {
   try {
     const { cattle, farmer, vaccineName, scheduledDate, notes } = req.body;
@@ -97,7 +127,6 @@ exports.addVaccination = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Mark vaccination complete
 exports.completeVaccination = async (req, res) => {
   try {
     const vaccination = await Vaccination.findByIdAndUpdate(
@@ -109,7 +138,6 @@ exports.completeVaccination = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Get milk analytics
 exports.getMilkAnalytics = async (req, res) => {
   try {
     const sevenDaysAgo = new Date();
@@ -122,7 +150,6 @@ exports.getMilkAnalytics = async (req, res) => {
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };
 
-// Get cattle full history
 exports.getCattleHistory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -134,25 +161,5 @@ exports.getCattleHistory = async (req, res) => {
       MilkRecord.find({ cattle: id }).sort({ date: -1 }).limit(7)
     ]);
     res.json({ cattle, health, ai, vaccinations, milk });
-  } catch (err) { res.status(500).json({ message: 'Server error' }); }
-};
-
-// Dashboard stats
-exports.getStats = async (req, res) => {
-  try {
-    const today = new Date();
-    const in7Days = new Date();
-    in7Days.setDate(today.getDate() + 7);
-
-    const [farmers, cattle, pendingAI, upcomingVaccinations] = await Promise.all([
-      User.countDocuments({ role: 'farmer' }),
-      Cattle.countDocuments(),
-      AIRequest.countDocuments({ status: 'pending' }),
-      Vaccination.countDocuments({
-        scheduledDate: { $gte: today, $lte: in7Days },
-        status: 'scheduled'
-      })
-    ]);
-    res.json({ farmers, cattle, pendingAI, upcomingVaccinations });
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 };

@@ -1,42 +1,51 @@
 const express = require('express');
 const router = express.Router();
-const { addCattle, getMyCattle, updateCattle, deleteCattle } = require('../controllers/cattleController');
-const { protect, authorizeRoles } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
+const {
+  getCattle, addCattle, updateCattle, deleteCattle,
+  updateWeight, updateHeat, getLifecycle
+} = require('../controllers/cattleController');
+const AIRequest = require('../models/AIRequest');
 
-router.use(protect);
+router.get('/', protect, getCattle);
+router.post('/', protect, addCattle);
+router.put('/:id', protect, updateCattle);
+router.delete('/:id', protect, deleteCattle);
+router.put('/:id/weight', protect, updateWeight);
+router.put('/:id/heat', protect, updateHeat);
+router.get('/:id/lifecycle', protect, getLifecycle);
 
-router.post('/', authorizeRoles('farmer'), addCattle);
-router.get('/', authorizeRoles('farmer', 'ldo', 'vet'), getMyCattle);
-router.put('/:id', authorizeRoles('farmer'), updateCattle);
-router.delete('/:id', authorizeRoles('farmer'), deleteCattle);
-// Update cattle weight
-router.put('/:id/weight', authorizeRoles('farmer'), async (req, res) => {
+// Get AI record matching calf DOB for sire auto-populate
+// Logic: find completed AI where aiDate <= calf DOB <= aiDate + 285 days
+router.get('/:id/ai-for-calf', protect, async (req, res) => {
   try {
-    const { weight, girth, length } = req.body;
-    let calculatedWeight = weight;
-    if (girth && length) {
-      const weightLbs = (girth * girth * length) / 300;
-      calculatedWeight = parseFloat((weightLbs * 0.453592).toFixed(1));
-    }
-    const cattle = await require('../models/Cattle').findByIdAndUpdate(
-      req.params.id,
-      { weight: calculatedWeight, lastWeightDate: new Date() },
-      { new: true }
-    );
-    res.json({ cattle, calculatedWeight });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-// Update last heat date
-router.put('/:id/heat', authorizeRoles('farmer'), async (req, res) => {
-  try {
-    const cattle = await require('../models/Cattle').findByIdAndUpdate(
-      req.params.id,
-      { lastHeatDate: req.body.lastHeatDate },
-      { new: true }
-    );
-    res.json(cattle);
+    const { dob } = req.query;
+    if (!dob) return res.json(null);
+
+    const calfDOB = new Date(dob);
+
+    // Find all completed AI requests for this cow
+    const aiRequests = await AIRequest.find({
+      cattle: req.params.id,
+      status: 'completed',
+      bullId: { $exists: true, $ne: '' },
+      aiDate: { $exists: true }
+    }).sort({ aiDate: -1 });
+
+    if (!aiRequests.length) return res.json(null);
+
+    // Find AI where calfDOB is within 265-295 days after aiDate (normal gestation 280 days)
+    const matched = aiRequests.find(ai => {
+      const aiDate = new Date(ai.aiDate);
+      const minDate = new Date(aiDate);
+      const maxDate = new Date(aiDate);
+      minDate.setDate(minDate.getDate() + 265);
+      maxDate.setDate(maxDate.getDate() + 295);
+      return calfDOB >= minDate && calfDOB <= maxDate;
+    });
+
+    // If no DOB-matched AI, return most recent AI
+    res.json(matched || aiRequests[0] || null);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

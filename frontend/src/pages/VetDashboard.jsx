@@ -83,7 +83,7 @@ export default function VetDashboard() {
 
         <div className="flex-1 p-4 md:p-8">
           {activeSection === 'home' && <HomeSection setActiveSection={setActiveSection} />}
-          {activeSection === 'alerts' && <AlertsSection />}
+          {activeSection === 'alerts' && <AlertsSection setActiveSection={setActiveSection} />}
           {activeSection === 'reports' && <ReportsSection />}
           {activeSection === 'prescriptions' && <PrescriptionsSection />}
           {activeSection === 'cattle' && <CattleSection />}
@@ -133,11 +133,10 @@ function HomeSection({ setActiveSection }) {
         <StatCard icon="💊" label="Prescriptions" value={stats.totalPrescriptions} color="bg-purple-100 text-purple-700" onClick={() => setActiveSection('prescriptions')} />
       </div>
 
-      {/* Emergency Health Alert Notifications */}
-      {notifications.length > 0 && (
+      {notifications.length > 0 ? (
         <div className="bg-red-50 border-2 border-red-400 rounded-xl p-4 mb-6">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="font-bold text-red-700 text-lg">🚨 Emergency Health Alerts</h3>
+            <h3 className="font-bold text-red-700 text-lg">🚨 හදිසි සෞඛ්‍ය අනතුරු ඇඟවීම්</h3>
             <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {notifications.filter(n => !n.isRead).length} New
             </span>
@@ -167,15 +166,12 @@ function HomeSection({ setActiveSection }) {
           </div>
           <button onClick={() => setActiveSection('alerts')}
             className="mt-3 bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition">
-            ⚠️ View all Health Alerts 
+            ⚠️ සියලු Health Alerts බලන්න
           </button>
         </div>
-      )}
-
-      {/* No alerts message */}
-      {notifications.length === 0 && (
+      ) : (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-center">
-          <p className="text-green-600 text-sm font-medium">✅ No emergency health alerts</p>
+          <p className="text-green-600 text-sm font-medium">✅ හදිසි සෞඛ්‍ය අනතුරු ඇඟවීම් නොමැත</p>
         </div>
       )}
 
@@ -207,7 +203,7 @@ function StatCard({ icon, label, value, color, onClick }) {
   );
 }
 
-function AlertsSection() {
+function AlertsSection({ setActiveSection }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -230,6 +226,12 @@ function AlertsSection() {
       fetchAlerts();
       setTimeout(() => setMessage(''), 3000);
     } catch (err) { console.error(err); }
+  };
+
+  const goToPrescription = (cattleId, farmerId) => {
+    localStorage.setItem('prescriptionCattle', cattleId);
+    localStorage.setItem('prescriptionFarmer', farmerId);
+    setActiveSection('prescriptions');
   };
 
   const filtered = filter === 'all' ? alerts : alerts.filter(a => a.status === filter);
@@ -311,10 +313,16 @@ function AlertsSection() {
                   {a.notes && <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded p-2">📝 {a.notes}</p>}
                 </div>
                 {a.status === 'pending' && (
-                  <button onClick={() => markReviewed(a._id)}
-                    className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap">
-                    ✅ Mark Reviewed
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => markReviewed(a._id)}
+                      className="bg-green-50 hover:bg-green-100 text-green-600 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap">
+                      ✅ Mark Reviewed
+                    </button>
+                    <button onClick={() => goToPrescription(a.cattle?._id, a.farmer?._id)}
+                      className="bg-purple-50 hover:bg-purple-100 text-purple-600 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap">
+                      💊 Add Prescription
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -418,7 +426,17 @@ function PrescriptionsSection() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const savedCattle = localStorage.getItem('prescriptionCattle');
+    const savedFarmer = localStorage.getItem('prescriptionFarmer');
+    if (savedCattle) {
+      setForm(prev => ({ ...prev, cattle: savedCattle, farmer: savedFarmer || '' }));
+      setShowForm(true);
+      localStorage.removeItem('prescriptionCattle');
+      localStorage.removeItem('prescriptionFarmer');
+    }
+    fetchData();
+  }, []);
 
   const handleSubmit = async () => {
     setFormError('');
@@ -429,7 +447,10 @@ function PrescriptionsSection() {
     if (!form.duration.trim()) return setFormError('Enter duration');
     try {
       const selectedCattle = cattle.find(c => c._id === form.cattle);
-      await API.post('/vet/prescriptions', { ...form, farmer: selectedCattle?.farmer?._id });
+      await API.post('/vet/prescriptions', {
+        ...form,
+        farmer: form.farmer || selectedCattle?.farmer?._id
+      });
       setMessage('✅ Prescription added successfully');
       setShowForm(false);
       setForm({ cattle: '', farmer: '', diagnosis: '', medication: '', dosage: '', duration: '', notes: '' });
@@ -453,13 +474,16 @@ function PrescriptionsSection() {
       {message && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-4 text-sm">{message}</div>}
 
       {showForm && (
-        <div className="bg-white rounded-xl shadow p-5 mb-6">
-          <h3 className="font-semibold text-gray-700 mb-4">💊 New Prescription</h3>
+        <div className="bg-white rounded-xl shadow p-5 mb-6 border border-purple-200">
+          <h3 className="font-semibold text-purple-700 mb-4">💊 New Prescription</h3>
           {formError && <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm">⚠️ {formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cattle *</label>
-              <select value={form.cattle} onChange={e => setForm({ ...form, cattle: e.target.value })}
+              <select value={form.cattle} onChange={e => {
+                const selectedC = cattle.find(c => c._id === e.target.value);
+                setForm({ ...form, cattle: e.target.value, farmer: selectedC?.farmer?._id || '' });
+              }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
                 <option value="">Select Cattle</option>
                 {cattle.map(c => <option key={c._id} value={c._id}>{c.name} ({c.cattleId}) - {c.farmer?.fullName}</option>)}
@@ -549,6 +573,8 @@ function CattleSection() {
   const [search, setSearch] = useState('');
   const [history, setHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [pedigree, setPedigree] = useState(null);
+  const [pedigreeLoading, setPedigreeLoading] = useState(false);
 
   useEffect(() => {
     API.get('/vet/cattle')
@@ -559,11 +585,22 @@ function CattleSection() {
 
   const fetchHistory = async (id) => {
     setHistoryLoading(true);
+    setPedigree(null);
     try {
       const res = await API.get(`/vet/cattle/${id}/history`);
       setHistory(res.data);
     } catch (err) { console.error(err); }
     finally { setHistoryLoading(false); }
+  };
+
+  const fetchPedigree = async (id) => {
+    setPedigreeLoading(true);
+    setHistory(null);
+    try {
+      const res = await API.get(`/cattle/${id}/lifecycle`);
+      setPedigree(res.data);
+    } catch (err) { console.error(err); }
+    finally { setPedigreeLoading(false); }
   };
 
   const filtered = cattle.filter(c =>
@@ -580,6 +617,7 @@ function CattleSection() {
       <input type="text" placeholder="Search by cattle name, tag or farmer..."
         value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+
       <div className="bg-white rounded-xl shadow overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead className="bg-purple-600 text-white">
@@ -588,12 +626,13 @@ function CattleSection() {
               <th className="px-4 py-3 text-left">Cattle</th>
               <th className="px-4 py-3 text-left">Breed</th>
               <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Sire</th>
               <th className="px-4 py-3 text-left">Action</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">No cattle found</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400">No cattle found</td></tr>
             ) : filtered.map((c, i) => (
               <tr key={c._id} className={i % 2 === 0 ? 'bg-white' : 'bg-purple-50'}>
                 <td className="px-4 py-3">{c.farmer?.fullName}<br /><span className="text-xs text-gray-400">{c.farmer?.phone}</span></td>
@@ -604,14 +643,22 @@ function CattleSection() {
                     c.status === 'සෞඛ්‍යසම්පන්න' ? 'bg-green-100 text-green-700' :
                     c.status === 'අසනීප' ? 'bg-red-100 text-red-700' :
                     c.status === 'ගර්භනී' ? 'bg-yellow-100 text-yellow-700' :
+                    c.status === 'මළ' ? 'bg-gray-100 text-gray-700' :
                     'bg-blue-100 text-blue-700'
                   }`}>{c.status}</span>
                 </td>
+                <td className="px-4 py-3 text-xs text-blue-700 font-medium">{c.sire || '-'}</td>
                 <td className="px-4 py-3">
-                  <button onClick={() => fetchHistory(c._id)}
-                    className="bg-purple-50 hover:bg-purple-100 text-purple-600 px-3 py-1 rounded-lg text-xs font-medium transition">
-                    📋 History
-                  </button>
+                  <div className="flex gap-2">
+                    <button onClick={() => fetchHistory(c._id)}
+                      className="bg-purple-50 hover:bg-purple-100 text-purple-600 px-2 py-1 rounded-lg text-xs font-medium transition">
+                      📋 History
+                    </button>
+                    <button onClick={() => fetchPedigree(c._id)}
+                      className="bg-green-50 hover:bg-green-100 text-green-600 px-2 py-1 rounded-lg text-xs font-medium transition">
+                      🌳 Pedigree
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -621,10 +668,13 @@ function CattleSection() {
 
       {historyLoading && <div className="text-center py-6 text-gray-400">Loading history...</div>}
       {history && !historyLoading && (
-        <div className="bg-white rounded-xl shadow p-5">
-          <h3 className="font-bold text-purple-700 mb-2">
-            📋 Clinical History — {history.cattle?.name} ({history.cattle?.cattleId})
-          </h3>
+        <div className="bg-white rounded-xl shadow p-5 mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold text-purple-700">
+              📋 Clinical History — {history.cattle?.name} ({history.cattle?.cattleId})
+            </h3>
+            <button onClick={() => setHistory(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+          </div>
           <p className="text-sm text-gray-500 mb-4">
             Farmer: {history.cattle?.farmer?.fullName} • {history.cattle?.farmer?.phone}
           </p>
@@ -651,6 +701,115 @@ function CattleSection() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {pedigreeLoading && <div className="text-center py-6 text-gray-400">Loading pedigree...</div>}
+      {pedigree && !pedigreeLoading && (
+        <PedigreePanel cattle={pedigree} onClose={() => setPedigree(null)} />
+      )}
+    </div>
+  );
+}
+
+function PedigreePanel({ cattle, onClose }) {
+  const [currentTime] = useState(() => Date.now());
+
+  const calcAge = (dob) => {
+    if (!dob) return '-';
+    const diff = currentTime - new Date(dob).getTime();
+    const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365));
+    const months = Math.floor(diff / (1000 * 60 * 60 * 24 * 30));
+    if (years > 0) return `${years}y ${months % 12}m`;
+    return `${months}m`;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow p-5 border border-purple-200">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold text-purple-700 text-lg">🌳 Pedigree — {cattle.name} ({cattle.cattleId})</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+      </div>
+
+      {/* Subject */}
+      <div className="bg-purple-600 text-white rounded-xl p-4 text-center mb-4">
+        <p className="text-2xl mb-1">🐄</p>
+        <p className="font-bold text-lg">{cattle.name}</p>
+        <p className="text-white text-sm opacity-80">#{cattle.cattleId} • {cattle.breed} • {cattle.gender || 'ගැහැණු'}</p>
+        <p className="text-white text-xs mt-1 opacity-70">{calcAge(cattle.dob)} • {cattle.status}</p>
+        <p className="text-white text-xs opacity-70">Farmer: {cattle.farmer?.fullName} ({cattle.farmer?.phone})</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        {/* Sire */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <h4 className="font-semibold text-blue-700 mb-2">🐂 Sire (පිය ගොනා)</h4>
+          {cattle.sire ? (
+            <div className="bg-white rounded-lg p-3">
+              <p className="font-semibold text-gray-800">{cattle.sire}</p>
+              <p className="text-xs text-blue-600 mt-1">✅ AI Bull ID — LDO recorded</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg p-3">
+              <p className="text-gray-400 text-sm">No sire data</p>
+              <p className="text-xs text-gray-400 mt-1">AI completion pending</p>
+            </div>
+          )}
+        </div>
+
+        {/* Dam */}
+        <div className="bg-pink-50 border border-pink-200 rounded-xl p-4">
+          <h4 className="font-semibold text-pink-700 mb-2">🐄 Dam (මව)</h4>
+          {cattle.dam ? (
+            <div className="bg-white rounded-lg p-3">
+              <p className="font-semibold text-gray-800">{cattle.dam.name}</p>
+              <p className="text-xs text-gray-500">#{cattle.dam.cattleId}</p>
+            </div>
+          ) : <p className="text-gray-400 text-sm">No dam data recorded</p>}
+        </div>
+      </div>
+
+      {/* Offspring */}
+      {cattle.offspring?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+          <h4 className="font-semibold text-gray-700 mb-3">🐮 Offspring ({cattle.offspring.length})</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {cattle.offspring.map(o => (
+              <div key={o._id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="font-semibold text-sm text-gray-800">{o.name}</p>
+                <p className="text-xs text-gray-500">#{o.cattleId}</p>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  o.status === 'සෞඛ්‍යසම්පන්න' ? 'bg-green-100 text-green-700' :
+                  o.status === 'මළ' ? 'bg-gray-100 text-gray-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>{o.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lifecycle Events */}
+      {cattle.lifecycleEvents?.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <h4 className="font-semibold text-gray-700 mb-3">📅 Lifecycle Events</h4>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {[...cattle.lifecycleEvents].reverse().map((ev, i) => (
+              <div key={i} className="flex items-start gap-3 p-2 bg-gray-50 rounded-lg">
+                <span className="text-lg">
+                  {ev.event === 'born' ? '🐮' :
+                   ev.event === 'pregnant' ? '🤰' :
+                   ev.event === 'calved' ? '🎉' :
+                   ev.event === 'ai' ? '💉' :
+                   ev.event === 'died' ? '💀' : '📌'}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-800 capitalize">{ev.event}</p>
+                  <p className="text-xs text-gray-500">{ev.date?.split('T')[0]} — {ev.notes}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
